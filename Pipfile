@@ -1,0 +1,29 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+django = "*"
+dj-rest-auth = "*"
+django-allauth = "*"
+djangorestframework = "*"
+djangorestframework-simplejwt = "*"
+xhtml2pdf = "*"
+django-cors-headers = "*"
+random-password-generator = "*"
+sendgrid = "*"
+python-decouple = "*"
+openai = "*"
+django-filter = "*"
+python-dotenv = "*"
+django-q = "*"
+celery = "*"
+django-celery-beat = "*"
+redis = "*"
+reportlab = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"

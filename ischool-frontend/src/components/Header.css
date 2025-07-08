@@ -1,0 +1,17 @@
+.custom-navbar {
+    background: linear-gradient(to right,  #00bfff,  #000000); /* dark to sky blue */
+    color: white;
+  }
+  
+  .register-btn {
+    background-color: #212529; /* Bootstrap dark */
+    color: white;
+    border: none;
+    padding: 6px 16px;
+  }
+  
+  .register-btn:hover {
+    background-color: #343a40; /* slightly lighter dark on hover */
+    color: white;
+  }
+  

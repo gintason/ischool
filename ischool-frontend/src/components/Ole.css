@@ -1,0 +1,91 @@
+/* === Base Layout === */
+.ole-page {
+  min-height: 100vh;
+  background: linear-gradient(to bottom right, #e3f2fd, #ffffff); /* soft sky blue to white */
+  padding-top: 60px;
+  padding-bottom: 60px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* === Typography === */
+.ole-heading {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #0b3d91; /* Deep educational blue */
+}
+
+.ole-subtext {
+  font-size: 1.2rem;
+  color: #555; /* Calm, readable gray */
+}
+
+/* === Cards === */
+.ole-card {
+  background-color: #ffffff;
+  border: 1px solid #dfe6ed;
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease;
+}
+
+.ole-card:hover {
+  transform: translateY(-6px);
+}
+
+/* === Buttons === */
+.ole-btn {
+  background-color: #0077b6; /* Sky/Navy Blue */
+  color: white;
+  border: none;
+  border-radius: 30px;
+  font-weight: 600;
+  padding: 10px 24px;
+  transition: all 0.3s ease;
+}
+
+.ole-btn:hover {
+  background-color: #005f8f;
+}
+
+/* === Sections === */
+.ole-section {
+  padding: 60px 0;
+}
+
+.ole-section-light {
+  background-color: #f9fbfd; /* Ivory-soft background */
+}
+
+.ole-section-dark {
+  background-color: #0b3d91; /* Deep blue */
+  color: white;
+}
+
+/* === Footer Utility === */
+.ole-footer a {
+  color: #fdd835; /* Soft golden yellow */
+  text-decoration: none;
+}
+
+.ole-footer a:hover {
+  color: #ffcc00;
+  text-decoration: underline;
+}
+
+/* === Utilities === */
+.text-golden {
+  color: #ffcc00; /* Schoolbook yellow */
+}
+
+.bg-golden {
+  background-color: #ffcc00;
+  color: #0b3d91; /* blue text on yellow */
+}
+
+.rounded-xl {
+  border-radius: 1.5rem;
+}
+
+.shadow-soft {
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.1);
+}

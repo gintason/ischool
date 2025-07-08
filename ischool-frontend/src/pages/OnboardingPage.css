@@ -1,0 +1,63 @@
+/* OnboardingPage.css */
+
+.onboarding-bg {
+  background: linear-gradient(to bottom right, #0077cc, #001f3f);
+  min-height: 100vh;
+  width: 100%;
+  padding: 2rem 0;
+  margin: 0;
+  overflow-x: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fade-in animation for smooth appearance */
+.fade-in {
+  animation: fadeIn 1s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card styling for both options */
+.option-card {
+  background-color: #ffffff;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 1rem;
+  height: 100%;
+}
+
+/* Hover effect for interactivity */
+.option-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Text improvements */
+.option-card .card-title {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.option-card .card-text {
+  font-size: 1rem;
+  color: #555;
+}
+
+/* Responsive footer */
+footer {
+  font-size: 0.875rem;
+  margin-top: 3rem;
+  color: #ccc;
+}

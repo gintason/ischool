@@ -1,0 +1,130 @@
+.hero-section {
+  position: relative;
+  overflow: hidden;
+  height: 100vh;
+  min-height: 500px;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.hero-carousel img {
+  height: 100vh;
+  object-fit: cover;
+}
+
+.hero-gradient-overlay {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.4));
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .hero-section {
+    height: auto;
+    padding: 4rem 0;
+  }
+  .hero-carousel img {
+    height: 60vh;
+  }
+}
+.features-section {
+  margin-top: -250px; /* climbs up over hero section */
+  position: relative;
+  z-index: 10;
+}
+
+.bg-edu-blue {
+  background-color: #0056b3; /* Deep Blue */
+}
+
+.bg-edu-green {
+  background-color: #28a745; /* Bootstrap Success Green */
+}
+
+.bg-edu-orange {
+  background-color: #fd7e14; /* Bootstrap Orange */
+}
+
+.feature-box h5 {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.feature-box p {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+/* Optional: Make icons and text nicely centered */
+.feature-box svg {
+  color: white;
+}
+
+.how-it-works-section {
+  width: 100%;
+  background-color: #2f2f2f; /* light dark background */
+  color: white;
+  padding-bottom: 6rem;
+}
+
+.step-box {
+  background-color: #3b3b3b; /* slightly lighter box */
+  color: white;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: default;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.step-box:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.icon-wrapper {
+  color: white;
+  background-color: #007bff; /* blue circle for icon */
+  width: 80px;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+.hero-content {
+  position: absolute;
+  top: -65%;
+  left: 22%;
+  transform: translate(-50%, -50%); /* Perfect centering */
+  z-index: 3;
+  padding: 0 1rem;
+  width: 100%;
+  max-width: 700px;
+  text-align: center;
+}
+
+.hero-gradient-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.6));
+  z-index: 2;
+}
+
+.hero-bottom-curve {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 120px;
+  background-color: #f8f9fa;
+  border-top-left-radius: 100% 60px;
+  border-top-right-radius: 100% 60px;
+  z-index: 1;
+}

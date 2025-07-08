@@ -1,0 +1,117 @@
+/* Gradient tailored for iSchool Ole: Sky Blue and Navy */
+.ole-navbar {
+  background: linear-gradient(to right, #2eaff4, #001f3f); /* blue to deep navy */
+  color: white;
+}
+
+.ole-navbar .nav-link {
+  color: white !important;
+  font-weight: 500;
+  transition: color 0.2s ease-in-out;
+}
+
+.ole-navbar .nav-link:hover {
+  color: #ffd60a !important; /* golden highlight on hover */
+}
+
+.ole-navbar .navbar-brand img {
+  height: 40px;
+}
+
+.ole-register-btn {
+  background-color: #ffd60a; /* golden yellow */
+  color: black;
+  border: none;
+  padding: 6px 16px;
+  font-weight: 600;
+}
+
+.ole-register-btn:hover {
+  background-color: #e6c200;
+  color: black;
+}
+
+.dropdown-menu {
+  z-index: 1055 !important; /* higher than default navbar z-index */
+}
+
+.ole-navbar,
+.navbar {
+  overflow: visible !important;
+}
+.dropdown-menu {
+  transition: all 0.3s ease-in-out;
+  opacity: 0;
+  visibility: show;
+}
+
+.dropdown-menu.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Ensure dropdown shows above navbar */
+.navbar .dropdown-menu {
+  position: absolute !important;
+  z-index: 1055 !important;
+  top: 100% !important;
+  right: 0 !important;
+  left: auto !important;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.75rem 1.25rem rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure parent doesn’t clip the dropdown */
+.ole-navbar {
+  overflow: visible !important;
+  position: relative;
+  z-index: 1040;
+}
+/* More universal override */
+/* Force dropdown menu to show properly */
+.navbar .dropdown-menu {
+  position: absolute !important;
+  top: 100% !important;
+  left: auto !important;
+  right: 0 !important;
+  z-index: 1055 !important;
+  display: block;
+  min-width: 10rem;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.75rem 1.25rem rgba(0, 0, 0, 0.1);
+  padding: 0.5rem 0;
+}
+
+/* Optional hover effect */
+.navbar .dropdown-item:hover {
+  background-color: #f8f9fa;
+}
+
+#login-dropdown .dropdown-menu {
+  z-index: 1050 !important;
+  top: 100% !important;
+  margin-top: 0.5rem;
+}
+.extra-space-left {
+  margin-left: 4rem !important;
+}
+
+.shift-left {
+  margin-right: 6rem !important; /* adjust 6rem as needed for more shift */
+}
+.dropdown-shift-left {
+  margin-right: 8rem !important;
+}
+
+.login-dropdown-fix {
+  margin-right: 1rem;
+}
+
+/* Mobile spacing fix: stack items with margin between */
+@media (max-width: 991.98px) {
+  .ole-register-btn {
+    margin-top: 0.75rem;
+  }
+}

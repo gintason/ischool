@@ -1,0 +1,116 @@
+/* General page styles */
+.ole-home {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Hero section styles */
+.hero-slide {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: white;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* Overlay if needed */
+.hero-slide .overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+
+/* Hero content sits above overlay */
+.hero-content {
+  position: relative;
+  z-index: 2;
+  padding: 1rem;
+}
+
+/* Buttons */
+.btn-ole-primary {
+  background-color: #007bff;
+  border: none;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-ole-primary:hover {
+  background-color: #0056b3;
+}
+
+.btn-ole-secondary {
+  background-color: #28a745;
+  border: none;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-ole-secondary:hover {
+  background-color: #1c7430;
+}
+
+/* Cards used in "How it Works" and "Why Choose Us" */
+.card h5, .card h6 {
+  font-weight: 600;
+}
+
+.card p {
+  margin-bottom: 0;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  transition: transform 0.3s ease;
+}
+
+/* Responsive improvements */
+@media (max-width: 767.98px) {
+  .hero-content h1 {
+    font-size: 2rem;
+  }
+
+  .hero-content p {
+    font-size: 1rem;
+  }
+
+  .btn-lg {
+    font-size: 1rem;
+    padding: 0.6rem 1.2rem;
+  }
+}
+
+.ole-full-width-section {
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+}
+
+.ole-full-width-section {
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+}
+
+.ole-slanted-section {
+  position: relative;
+  min-height: 75vh;
+  padding-bottom: 6rem;
+  clip-path: polygon(0 0, 100% 0, 100% 85%, 0% 100%);
+  background-color: #1a1a1a;
+  z-index: 1;
+}
+.ole-full-width-test-section {
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+}
+
+.bg-light-grey {
+  background-color: #f0f0f0; /* Feel free to adjust to another light grey */
+}
