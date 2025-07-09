@@ -257,8 +257,8 @@ CONTACT_EMAIL = "admin@ischool.ng"
 DEFAULT_FROM_EMAIL = "noreply@ischool.ng"
 
 # Paystack API Keys
-PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_TEST_PUBLIC_KEY')
-PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_TEST_SECRET_KEY')
+PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
+PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
 
 PAYSTACK_CALLBACK_URL = "https://ischool.ng/ole-student/verify-payment"
 
