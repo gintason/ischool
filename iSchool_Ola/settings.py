@@ -69,7 +69,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+   # "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -215,7 +215,8 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 
 CORS_ALLOWED_ORIGINS = [
-    "https://ischool.ng"  # React dev server
+    "https://www.ischool.ng"  # React dev server
+    "https://ischool.ng"
    
 ]
 
@@ -262,10 +263,10 @@ DEFAULT_FROM_EMAIL = "noreply@ischool.ng"
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
 
-PAYSTACK_CALLBACK_URL = "https://ischool.ng/ole-student/verify-payment"
+PAYSTACK_CALLBACK_URL = "https://www.ischool.ng/ole-student/verify-payment"
 
 # Paystack
-OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://ischool.ng//ole-subscription/verify")
+OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng//ole-subscription/verify")
 
 
 PAYSTACK_PLAN_IDS = {

@@ -426,7 +426,7 @@ class VerifyOleStudentPaymentView(APIView):
             Email: {email}
             Password: {password}
 
-            Visit: https://ischool.ng/ole-student/login
+            Visit: https://www.ischool.ng/ole-student/login
 
             Best regards,  
             iSchool Ole Team

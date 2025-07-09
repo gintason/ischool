@@ -104,7 +104,7 @@ def initiate_payment(request):
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        "callback_url": "https://ischool.ng/payment-verify",  # ✅ Update this in production
+        "callback_url": "https://www.ischool.ng/payment-verify",  # ✅ Update this in production
         "email": data["email"],
         "metadata": {
             "account_type": data["account_type"],
@@ -286,7 +286,7 @@ Welcome to iSchool Ola! Your registration was successful. Below are the login de
 
 {login_details}
 
-Login here: https://ischool.ng/student/login
+Login here: https://www.ischool.ng/student/login
 
 Best regards,  
 iSchool Ola Team
