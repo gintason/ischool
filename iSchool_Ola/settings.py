@@ -220,6 +220,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 ALLOWED_HOSTS = [
+    'ischool-backend.onrender.com',
     "ischool.ng",
     "www.ischool.ng",
 ]
