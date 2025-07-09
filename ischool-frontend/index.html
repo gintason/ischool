@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+     <!-- ✅ Force redirect to www -->
+    <script>
+      if (location.hostname === "ischool.ng") {
+        location.replace("https://www.ischool.ng" + location.pathname + location.search);
+      }
+    </script>
+
     <!-- Title and Branding -->
     <title>iSchool.ng – Smarter Tests, Brighter Future</title>
     <meta name="description" content="iSchool.ng is Nigeria's leading online assessment platform for secondary school students (JSS1–SSS3). Practice smarter with CBT tests and real-time results." />
