@@ -64,7 +64,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "elibrary",
     'django_celery_beat',
-    'apps',
+  
 
 ]
 
@@ -252,6 +252,7 @@ LOGGING = {
 
 SENDGRID_API_KEY = config("SENDGRID_API_KEY")
 SENDGRID_FROM_EMAIL = config("SENDGRID_FROM_EMAIL")
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CONTACT_EMAIL = "admin@ischool.ng"
 DEFAULT_FROM_EMAIL = "noreply@ischool.ng"
