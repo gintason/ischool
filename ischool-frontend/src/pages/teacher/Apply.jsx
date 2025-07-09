@@ -91,7 +91,7 @@ const Apply = () => {
     });
 
     try {
-      await axios.post("https://ischool.ng/api/teachers/apply/", data, {
+      await axios.post("https://www.ischool.ng/api/teachers/apply/", data, {
         headers: {
           "Content-Type": "multipart/form-data",
         },

@@ -16,7 +16,7 @@ const OleStudentDashboard = () => {
   const [now, setNow] = useState(new Date());
 
   const baseURL =
-    import.meta.env.VITE_API_BASE_URL || "https://ischool.ng/api";
+    import.meta.env.VITE_API_BASE_URL || "https://www.ischool.ng/api";
 
   useEffect(() => {
     const rawToken = localStorage.getItem("ole_token");

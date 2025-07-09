@@ -12,7 +12,7 @@ const OleStudentLogin = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://ischool.ng/api";
+  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://www.ischool.ng/api";
 
 
   // Auto-fill if previously saved
