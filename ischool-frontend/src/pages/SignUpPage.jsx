@@ -7,7 +7,7 @@ import './styles/SignUpPage.css';
 import CenteredToast from '../components/CenteredToast';
 import bgImage from '../assets/signup-bg.png';
 
-const SLOT_PRICE_MONTHLY = 6100;
+const SLOT_PRICE_MONTHLY = 10;
 const SLOT_PRICE_YEARLY = 52000;
 
 const SignUpPage = () => {
@@ -73,13 +73,15 @@ const SignUpPage = () => {
       setLoading(true);
 
       const handler = window.PaystackPop.setup({
-        key: 'pk_test_f3ac350fd01c5dac7972471d27a5f218545aec33',
+        key: 'pk_live_aac354a9d3f777557dc1e0e6be5f84700210f358',
         email: formData.email || '',
         amount: totalAmount * 100,
         currency: 'NGN',
         ref: tx_ref,
         callback: function (response) {
+          console.log("💡 Paystack callback response:", response); // <-- ADD THIS
           if (response.status === "success" || response.message === "Approved") {
+            console.log("💡 Paystack callback reference:", response.reference); // <-- ADD THIS
             handleSuccessfulPayment(response.reference, tx_ref, slots); // ✅ FIXED LINE
           } else {
             setLoading(false);
@@ -240,7 +242,7 @@ const SignUpPage = () => {
               <Form.Group className="mb-3" controlId="formGridBillingCycle">
                 <Form.Label>Billing Cycle</Form.Label>
                 <Form.Select name="billingCycle" value={formData.billingCycle} onChange={handleChange} required>
-                  <option value="monthly">Monthly - ₦6,100</option>
+                  <option value="monthly">Monthly - ₦10</option>
                   <option value="yearly">Yearly - ₦52,000</option>
                 </Form.Select>
               </Form.Group>
