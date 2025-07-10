@@ -161,8 +161,15 @@ def verify_and_register(request):
         except json.JSONDecodeError:
             return Response({"detail": "Invalid format for student details."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not all([transaction_id, tx_ref, email, account_type, name, location, state]):
-        return Response({"detail": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+    # ✅ Check for required fields and return specific missing ones
+        required_fields = ["transaction_id", "tx_ref", "email", "account_type", "name", "location", "state"]
+        missing = [field for field in required_fields if not data.get(field)]
+        if missing:
+            return Response(
+                {"detail": f"Missing required fields: {', '.join(missing)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
     if len(student_details) != slots:
         return Response({"detail": "Number of student details does not match the number of slots."},
