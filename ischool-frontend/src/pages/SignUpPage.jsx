@@ -213,7 +213,7 @@ const SignUpPage = () => {
               <Form.Group className="mb-3" controlId="formGridBillingCycle">
                 <Form.Label>Billing Cycle</Form.Label>
                 <Form.Select name="billingCycle" value={formData.billingCycle} onChange={handleChange} required>
-                  <option value="monthly">Monthly - ₦6,100</option>
+                  <option value="monthly">Monthly - ₦10</option>
                   <option value="yearly">Yearly - ₦52,000</option>
                 </Form.Select>
               </Form.Group>
