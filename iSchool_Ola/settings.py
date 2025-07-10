@@ -146,10 +146,10 @@ CONTACT_EMAIL = "admin@ischool.ng"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng"
-    "https://ischool.ng"
-    "https://ischool-frontend.onrender.com"
-    "https://ischool-backend.onrender.com"
+   "https://www.ischool.ng",
+    "https://ischool.ng",
+    "https://ischool-frontend.onrender.com",
+    "https://ischool-backend.onrender.com",
 ]
 CORS_ALLOW_ALL_ORIGINS = True  # Optional fallback
 
