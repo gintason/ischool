@@ -14,7 +14,7 @@ const OleStudentRegister = () => {
   const [form, setForm] = useState({
     full_name: '',
     email: '',
-    plan_type: 'monthly',
+    plan_type: 'ole_monthly',
     class_level_id: '',
     subject_ids: [],
   });
@@ -171,7 +171,6 @@ const OleStudentRegister = () => {
                       value={form.plan_type}
                     >
                       <option value="monthly">Monthly Plan (₦6100 )</option>
-                      <option value="yearly">Yearly Plan (₦8100 )</option>
               
                     </select>
                   </div>
