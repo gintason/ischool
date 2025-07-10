@@ -181,13 +181,24 @@ PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
 PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
 OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://api.ischool.ng/ole-subscription/verify")
+
 PAYSTACK_PLAN_IDS = {
-    "monthly": "PLN_8zqxfh5dmamqena",
-    "yearly": "PLN_9pg7j1h1vxof88o",
+    #OLE PLAN
+    "ole_monthly": "PLN_ky27i039aj6tws7",
+
+    #OLA PLANS
+    "ola_monthly": "PLN_ggznevdmbw5pjb4",
+    "ola_yearly": "PLN_r1rhq04xs8yd3uv"
 }
+
+
 PAYSTACK_PLAN_AMOUNTS = {
-    "monthly": 1000000,
-    "yearly": 3000000,
+    #Ole plan amounts
+    "ole_monthly": 610000,
+
+    #Ola plans amounts
+    "ola_monthly": 610000,
+    "ola_yearly": 5200000,
 }
 
 # Celery
