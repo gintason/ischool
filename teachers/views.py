@@ -99,6 +99,8 @@ class TeacherApplicationView(APIView):
                 {"message": "Application submitted successfully, please check your mail for more information."},
                 status=status.HTTP_201_CREATED
             )
+          # ❗️You MUST return a response here to avoid NoneType crash
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 class HireTeacherView(APIView):
