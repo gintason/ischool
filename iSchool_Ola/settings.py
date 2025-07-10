@@ -146,8 +146,8 @@ CONTACT_EMAIL = "admin@ischool.ng"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng",
-    "https://ischool.ng",
+    "https://www.ischool.ng"
+    "https://ischool.ng"
 ]
 CORS_ALLOW_ALL_ORIGINS = True  # Optional fallback
 
@@ -202,5 +202,5 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 #SLOT_PRICE_MONTHLY = 6100, SLOT_PRICE_YEARLY = 52000
 
 # Other constants
-SLOT_PRICE_MONTHLY = 50 #SLOT_PRICE_MONTHLY = 6100,
+SLOT_PRICE_MONTHLY = 10
 SLOT_PRICE_YEARLY = 52000

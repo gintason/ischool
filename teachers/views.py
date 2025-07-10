@@ -51,8 +51,6 @@ from django.core.mail import send_mail
 from django.contrib import messages
 
 import uuid
-import logging
-logger = logging.getLogger(__name__)
 
 # Constants
 VISIBLE_STUDENTS_PER_CLASS = 10
@@ -99,8 +97,6 @@ class TeacherApplicationView(APIView):
                 {"message": "Application submitted successfully, please check your mail for more information."},
                 status=status.HTTP_201_CREATED
             )
-          # ❗️You MUST return a response here to avoid NoneType crash
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 class HireTeacherView(APIView):
