@@ -155,6 +155,7 @@ def verify_and_register(request):
     account_details = data.get("account_details", "").strip()
     student_details = data.get("studentDetails", [])
 
+
     if isinstance(student_details, str):
         try:
             student_details = json.loads(student_details)
@@ -162,13 +163,13 @@ def verify_and_register(request):
             return Response({"detail": "Invalid format for student details."}, status=status.HTTP_400_BAD_REQUEST)
 
     # ✅ Check for required fields and return specific missing ones
-        required_fields = ["transaction_id", "tx_ref", "email", "account_type", "name", "location", "state"]
-        missing = [field for field in required_fields if not data.get(field)]
-        if missing:
-            return Response(
-                {"detail": f"Missing required fields: {', '.join(missing)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    required_fields = ["transaction_id", "tx_ref", "email", "account_type", "name", "location", "state"]
+    missing = [field for field in required_fields if not data.get(field)]
+    if missing:
+        return Response(
+            {"detail": f"Missing required fields: {', '.join(missing)}"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
     if len(student_details) != slots:

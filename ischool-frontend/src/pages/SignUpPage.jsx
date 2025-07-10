@@ -80,7 +80,7 @@ const SignUpPage = () => {
         ref: tx_ref,
         callback: function (response) {
           if (response.status === "success" || response.message === "Approved") {
-            handleSuccessfulPayment(response, tx_ref, slots);
+            handleSuccessfulPayment(response.reference, tx_ref, slots); // ✅ FIXED LINE
           } else {
             setLoading(false);
             setToastMessage("Payment was not successful. Please try again.");
@@ -96,43 +96,42 @@ const SignUpPage = () => {
     }, 100);
   };
 
-  const handleSuccessfulPayment = async (response, tx_ref, slots) => {
-    const payload = {
-      transaction_id: response.reference,
-      tx_ref: tx_ref,
-      email: formData.email || '',
-      account_type: formData.accountType || '',
-      state: formData.state || '',
-      slots,
-      name: formData.name || '',
-      location: formData.location || '',
-      referral_code: formData.referralCode || '',
-      account_details: formData.accountDetails || '',
-      billing_cycle: formData.billingCycle,
-      studentDetails: studentDetails.map(student => ({
-        fullName: student.fullName || '',
-        email: student.email || '',
-      }))
-    };
-
-    try {
-      await axios.post(
-        'https://api.ischool.ng/api/payments/verify-and-register/',
-        payload
-      );
-      setToastMessage('Registration completed successfully! Please check your email for Student(s) login details');
-      setShowToast(true);
-      setLoading(false);
-      setTimeout(() => {
-        window.location.href = "/student/login";
-      }, 3500);
-    } catch (err) {
-      setToastMessage('Payment was successful, but registration failed. Please contact support.');
-      setShowToast(true);
-      setLoading(false);
-    }
+ const handleSuccessfulPayment = async (transactionReference, tx_ref, slots) => {
+  const payload = {
+    transaction_id: transactionReference, // ✅ Use correct Paystack reference
+    tx_ref: tx_ref,
+    email: formData.email || '',
+    account_type: formData.accountType || '',
+    state: formData.state || '',
+    slots,
+    name: formData.name || '',
+    location: formData.location || '',
+    referral_code: formData.referralCode || '',
+    account_details: formData.accountDetails || '',
+    billing_cycle: formData.billingCycle,
+    studentDetails: studentDetails.map(student => ({
+      fullName: student.fullName || '',
+      email: student.email || '',
+    }))
   };
-  
+
+  try {
+    await axios.post(
+      'https://api.ischool.ng/api/payments/verify-and-register/',
+      payload
+    );
+    setToastMessage('Registration completed successfully! Please check your email for Student(s) login details');
+    setShowToast(true);
+    setLoading(false);
+    setTimeout(() => {
+      window.location.href = "/student/login";
+    }, 3500);
+  } catch (err) {
+    setToastMessage('Payment was successful, but registration failed. Please contact support.');
+    setShowToast(true);
+    setLoading(false);
+  }
+};
 
   const handleSubmit = (e) => {
   e.preventDefault();
