@@ -14,7 +14,6 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
@@ -24,23 +23,23 @@ from django.views.generic import TemplateView
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    # ✅ Use a distinct prefix for users app
     path("api/users/", include("users.urls", namespace="users")),
-    path("api/school/", include("school.urls")),  # School-related endpoints
-    path("api/core/", include("core.urls")),      # Core endpoints
-    path('teacher/', include('teacher_dashboard.urls')),
+    path("api/school/", include("school.urls")),
+    path("api/core/", include("core.urls")),
+    path("teacher/", include("teacher_dashboard.urls")),
     path("api/student/dashboard/", include("student_dashboard.urls")),
-    path('parent/', include('parent_dashboard.urls')),
-    path('api/payments/', include('payments.urls')),  # ⬅️ Add this line
-    path('api/', include('test_app.urls')),
+    path("parent/", include("parent_dashboard.urls")),
+    path("api/payments/", include("payments.urls")),
+    path("api/", include("test_app.urls")),
     path("api/teachers/", include("teachers.urls", namespace="teachers")),
-    path("api/elibrary", include('elibrary.urls')),
+    path("api/elibrary/", include("elibrary.urls")),  # ✅ Fixed
+]
 
-     # React frontend fallback
+# ✅ React fallback MUST be outside urlpatterns (and always last)
+urlpatterns += [
     re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
+]
 
-    
-] 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
