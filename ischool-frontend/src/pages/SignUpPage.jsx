@@ -132,12 +132,40 @@ const SignUpPage = () => {
       setLoading(false);
     }
   };
+  
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    if (loading) return;
-    handlePaystackPayment();
-  };
+  e.preventDefault();
+  if (loading) return;
+
+  const { accountType, state, name, location, email } = formData;
+  const missingFields = [];
+
+  if (!accountType) missingFields.push("Account Type");
+  if (!state) missingFields.push("State");
+  if (!name) missingFields.push("Name");
+  if (!location) missingFields.push("Location");
+  if (!email) missingFields.push("Email");
+
+  const anyEmptyStudent = studentDetails.some(
+    student => !student.fullName || !student.email
+  );
+
+  if (anyEmptyStudent) {
+    setToastMessage("Please fill in all student full names and emails.");
+    setShowToast(true);
+    return;
+  }
+
+  if (missingFields.length > 0) {
+    setToastMessage(`Missing required fields: ${missingFields.join(", ")}`);
+    setShowToast(true);
+    return;
+  }
+
+  handlePaystackPayment();
+};
+
 
   const perSlotAmount = formData.billingCycle === 'yearly' ? SLOT_PRICE_YEARLY : SLOT_PRICE_MONTHLY;
   const totalAmount = formData.slots * perSlotAmount;
