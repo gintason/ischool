@@ -7,7 +7,7 @@ import './styles/SignUpPage.css';
 import CenteredToast from '../components/CenteredToast';
 import bgImage from '../assets/signup-bg.png';
 
-const SLOT_PRICE_MONTHLY = 6100;
+const SLOT_PRICE_MONTHLY = 10;
 const SLOT_PRICE_YEARLY = 52000;
 
 const SignUpPage = () => {
