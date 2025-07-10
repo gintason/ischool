@@ -6,7 +6,7 @@ const StudentLessonHistory = () => {
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem("ole_token");
   const navigate = useNavigate();
-  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://ischool-backend.onrender.com/api";
+  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api";
 
   useEffect(() => {
     if (!token) {

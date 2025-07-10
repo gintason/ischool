@@ -10,7 +10,7 @@ const StudentJoinClass = () => {
   const [attendanceId, setAttendanceId] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://ischool-backend.onrender.com/api";
+  const baseURL = import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api";
   const token = localStorage.getItem("ole_token");
   const oleUser = JSON.parse(localStorage.getItem("ole_user")); // ✅ use local storage for subscription status
 

@@ -117,7 +117,7 @@ const SignUpPage = () => {
 
     try {
       await axios.post(
-        'https://ischool-backend.onrender.com/api/payments/verify-and-register/',
+        'https://api.ischool.ng/api/payments/verify-and-register/',
         payload
       );
       setToastMessage('Registration completed successfully! Please check your email for Student(s) login details');

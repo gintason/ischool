@@ -18,6 +18,7 @@ ALLOWED_HOSTS = [
     'ischool-backend.onrender.com',
     "ischool.ng",
     "www.ischool.ng",
+    "api.ischool.ng",
 ]
 
 # Application definition
@@ -146,10 +147,15 @@ CONTACT_EMAIL = "admin@ischool.ng"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng"
-    "https://ischool.ng"
+    "https://www.ischool.ng",
+  
 ]
 CORS_ALLOW_ALL_ORIGINS = True  # Optional fallback
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://www.ischool.ng",
+    "https://api.ischool.ng",
+]
 
 # Logging
 LOGGING = {
@@ -173,8 +179,8 @@ LOGGING = {
 # Paystack
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
-PAYSTACK_CALLBACK_URL = "https://ischool-backend.onrender.com/ole-student/verify-payment"
-OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://ischool-backend.onrender.com/ole-subscription/verify")
+PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
+OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://api.ischool.ng/ole-subscription/verify")
 PAYSTACK_PLAN_IDS = {
     "monthly": "PLN_8zqxfh5dmamqena",
     "yearly": "PLN_9pg7j1h1vxof88o",
