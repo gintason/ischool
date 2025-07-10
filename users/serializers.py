@@ -160,10 +160,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
     
 
+OLE_PLAN_CHOICES = [
+    ('ole_monthly', 'Monthly'),
+]
+
 class OleStudentRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField()
     email = serializers.EmailField()
-    plan_type = serializers.ChoiceField(choices=[('monthly', 'Monthly'), ('yearly', 'Yearly')])
+    plan_type = serializers.ChoiceField(choices=OLE_PLAN_CHOICES)
     class_level_id = serializers.IntegerField()
     subject_ids = serializers.ListField(
         child=serializers.IntegerField(), 
@@ -171,6 +175,7 @@ class OleStudentRegistrationSerializer(serializers.Serializer):
         help_text="List of subject IDs the student is registering for"
     )
 
+    
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
