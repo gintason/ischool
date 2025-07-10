@@ -26,7 +26,7 @@ const OleStudentRegister = () => {
   // ✅ Fetch class levels
   useEffect(() => {
     axios
-      .get('https://api.ischool.ng/api/teachers/class-levels/')
+      .get('https://ischool-backend.onrender.com/api/teachers/class-levels/')
       .then((res) => {
         if (Array.isArray(res.data)) {
           setClassLevels(res.data);
@@ -42,7 +42,7 @@ const OleStudentRegister = () => {
   useEffect(() => {
     if (form.class_level_id) {
       axios
-        .get(`https://api.ischool.ng/api/teachers/subjects/?class_level_id=${form.class_level_id}`)
+        .get(`https://ischool-backend.onrender.com/api/teachers/subjects/?class_level_id=${form.class_level_id}`)
         .then((res) => {
           if (Array.isArray(res.data)) {
             setSubjects(res.data);
@@ -82,7 +82,7 @@ const OleStudentRegister = () => {
 
   try {
     const response = await axios.post(
-      'https://api.ischool.ng/api/users/ole-student/register/',
+      'https://ischool-backend.onrender.com/api/users/ole-student/register/',
       form
     );
 
@@ -171,6 +171,7 @@ const OleStudentRegister = () => {
                       value={form.plan_type}
                     >
                       <option value="monthly">Monthly Plan (₦6100 )</option>
+                      <option value="yearly">Yearly Plan (₦8100 )</option>
               
                     </select>
                   </div>
