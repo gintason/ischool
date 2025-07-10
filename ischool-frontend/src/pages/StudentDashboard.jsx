@@ -25,7 +25,7 @@ function StudentDashboard() {
       navigate('/student/login');
     } else {
       axios
-        .get('https://www.ischool.ng/api/student/dashboard/', {
+        .get('https://ischool-backend.onrender.com/api/student/dashboard/', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

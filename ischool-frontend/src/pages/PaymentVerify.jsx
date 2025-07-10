@@ -20,7 +20,7 @@ const PaymentVerify = () => {
           return;
         }
 
-        const res = await axios.post('https://www.ischool.ng/api/payments/api/verify-and-register/', {
+        const res = await axios.post('https://ischool-backend.onrender.com/api/payments/api/verify-and-register/', {
           ...registrationData,
           transaction_id,
           tx_ref,

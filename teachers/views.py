@@ -51,6 +51,8 @@ from django.core.mail import send_mail
 from django.contrib import messages
 
 import uuid
+import logging
+logger = logging.getLogger(__name__)
 
 # Constants
 VISIBLE_STUDENTS_PER_CLASS = 10

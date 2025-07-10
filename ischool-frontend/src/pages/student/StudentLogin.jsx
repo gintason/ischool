@@ -22,7 +22,7 @@ const StudentLogin = () => {
 
     if (username && password) {
       try {
-        const response = await fetch("https://www.ischool.ng/api/users/auth/login/", {
+        const response = await fetch("https://ischool-backend.onrender.com/api/users/auth/login/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

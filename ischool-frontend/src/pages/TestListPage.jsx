@@ -16,7 +16,7 @@ function TestListPage() {
       return;
     }
 
-    axios.get('https://www.ischool.ng/api/tests/', {
+    axios.get('https://ischool-backend.onrender.com/api/tests/', {
       headers: {
         Authorization: `Bearer ${token}`,
       },

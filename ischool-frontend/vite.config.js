@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://www.ischool.ng', // 👈 your Django backend
+        target: 'https://ischool-backend.onrender.com', // 👈 your Django backend
         changeOrigin: true,
         secure: false,
       },

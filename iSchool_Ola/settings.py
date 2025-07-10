@@ -146,8 +146,10 @@ CONTACT_EMAIL = "admin@ischool.ng"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng",
+    "https://www.ischool.ng"
     "https://ischool.ng"
+    "https://ischool-frontend.onrender.com"
+    "https://ischool-backend.onrender.com"
 ]
 CORS_ALLOW_ALL_ORIGINS = True  # Optional fallback
 
@@ -173,8 +175,8 @@ LOGGING = {
 # Paystack
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
-PAYSTACK_CALLBACK_URL = "https://www.ischool.ng/ole-student/verify-payment"
-OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng/ole-subscription/verify")
+PAYSTACK_CALLBACK_URL = "https://ischool-backend.onrender.com/ole-student/verify-payment"
+OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://ischool-backend.onrender.com/ole-subscription/verify")
 PAYSTACK_PLAN_IDS = {
     "monthly": "PLN_8zqxfh5dmamqena",
     "yearly": "PLN_9pg7j1h1vxof88o",
@@ -199,6 +201,8 @@ CELERY_BEAT_SCHEDULE = {
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+#SLOT_PRICE_MONTHLY = 6100, SLOT_PRICE_YEARLY = 52000
+
 # Other constants
-SLOT_PRICE_MONTHLY = 6100
+SLOT_PRICE_MONTHLY = 50 #SLOT_PRICE_MONTHLY = 6100,
 SLOT_PRICE_YEARLY = 52000

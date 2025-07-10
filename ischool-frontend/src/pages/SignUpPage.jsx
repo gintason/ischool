@@ -73,7 +73,7 @@ const SignUpPage = () => {
       setLoading(true);
 
       const handler = window.PaystackPop.setup({
-        key: 'pk_test_f3ac350fd01c5dac7972471d27a5f218545aec33',
+        key:'pk_live_aac354a9d3f777557dc1e0e6be5f84700210f358',
         email: formData.email || '',
         amount: totalAmount * 100,
         currency: 'NGN',
@@ -117,7 +117,7 @@ const SignUpPage = () => {
 
     try {
       await axios.post(
-        'https://www.ischool.ng/api/payments/verify-and-register/',
+        'https://ischool-backend.onrender.com/api/payments/verify-and-register/',
         payload
       );
       setToastMessage('Registration completed successfully! Please check your email for Student(s) login details');

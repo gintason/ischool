@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://www.ischool.ng/api/teachers/', // base path for teacher-related API endpoints
+  baseURL: 'https://ischool-backend.onrender.com/api/teachers/', // base path for teacher-related API endpoints
   headers: {
     'Content-Type': 'application/json',
   },
