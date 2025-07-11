@@ -148,9 +148,10 @@ CONTACT_EMAIL = "admin@ischool.ng"
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "https://www.ischool.ng",
+   
   
 ]
-CORS_ALLOW_ALL_ORIGINS = True  # Optional fallback
+CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "https://www.ischool.ng",
