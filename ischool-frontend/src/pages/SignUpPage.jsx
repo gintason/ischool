@@ -79,7 +79,7 @@ const SignUpPage = () => {
         currency: 'NGN',
         ref: tx_ref,
         callback: function (response) {
-          console.log("💡 Paystack callback response:", response); // <-- ADD THIS
+          console.log("💡 Paystack callback reference:", response.reference); // ✅ This is what Paystack expects
           if (response.status === "success" || response.message === "Approved") {
             console.log("💡 Paystack callback reference:", response.reference); // <-- ADD THIS
             handleSuccessfulPayment(response.reference, tx_ref, slots); // ✅ FIXED LINE

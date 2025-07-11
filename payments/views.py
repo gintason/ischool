@@ -179,6 +179,7 @@ def verify_and_register(request):
     if PaymentTransaction.objects.filter(transaction_id=transaction_id).exists():
         return Response({"detail": "Transaction already verified."}, status=status.HTTP_200_OK)
 
+    transaction_id = data.get("transaction_id")  # ✅ This is Paystack's reference
     url = f"https://api.paystack.co/transaction/verify/{transaction_id}"
     headers = {
         "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"
