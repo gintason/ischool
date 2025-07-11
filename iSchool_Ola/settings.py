@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from celery.schedules import crontab
 import logging
 import dj_database_url
-
+from corsheaders.defaults import default_headers
 # Load .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -48,9 +48,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # ✅ MUST BE FIRST
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -58,6 +58,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 
 ROOT_URLCONF = "iSchool_Ola.urls"
 
@@ -149,15 +150,21 @@ CONTACT_EMAIL = "admin@ischool.ng"
 CORS_ALLOWED_ORIGINS = [
     "https://www.ischool.ng",  # Your production frontend
 ]
-CORS_ORIGIN_WHITELIST = [
-    "https://www.ischool.ng",
-    ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_ALL_ORIGINS = False
+
 
 CSRF_TRUSTED_ORIGINS = [
     "https://www.ischool.ng",
     "https://api.ischool.ng",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'Authorization',
+    'X-CSRFToken',
+    'Content-Type',
 ]
 
 # Logging
