@@ -115,8 +115,9 @@ const Apply = () => {
       }, 800);
     } catch (err) {
       console.error("❌ Submission error:", err.response ?? err);
-      const message = err.response?.data?.error || "Submission failed. Try again.";
+      const message = JSON.stringify(err.response?.data?.errors || err.response?.data || "Submission failed. Try again.");
       setToast({ show: true, message, variant: "danger" });
+
     } finally {
       setLoading(false);
     }
