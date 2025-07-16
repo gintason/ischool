@@ -46,7 +46,7 @@ const StudentLogin = () => {
           if (data.detail === "Your subscription has expired. Please buy slots again to continue.") {
             showToastNotification("Your subscription has expired. Redirecting to slot purchase...");
             setTimeout(() => {
-              navigate("/signup");
+              navigate("/sign_up");
             }, 3000);
           } else {
             showToastNotification(data.error || data.detail || "Login failed. Please try again.");
