@@ -42,7 +42,7 @@ from .serializers import (
 from elibrary.serializers import ELibraryChapterSerializer
 from users.serializers import OleStudentBasicSerializer
 from .utils.password_generator import generate_password
-from emails.sendgrid_email import send_email
+from emails.sendgrid_email import send_email, BadHeaderError
 from datetime import datetime
 from django.utils.timezone import now
 from .models import OleLesson
@@ -52,6 +52,9 @@ from django.core.mail import send_mail
 from django.contrib import messages
 
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Constants
 VISIBLE_STUDENTS_PER_CLASS = 10
@@ -84,22 +87,18 @@ class TeacherApplicationView(APIView):
 
             try:
                 send_mail(
-                    subject,
-                    message,
-                    "noreply@ischool.ng",
-                    [email],
-                )
+                subject,
+                message,
+                "noreply@ischool.ng",
+                [email],
+                fail_silently=False  # make sure this is False so you can catch real exceptions
+            )
             except Exception as e:
+                logger.error("❌ Email sending failed", exc_info=True)  # logs full traceback to console
                 return Response(
                     {"error": f"Application saved, but email failed: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-
-            return Response(
-                {"message": "Application submitted successfully. Please check your email."},
-                status=status.HTTP_201_CREATED
-            )
-
         # ✅ Handle validation errors:
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
