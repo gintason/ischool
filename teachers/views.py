@@ -62,12 +62,15 @@ VISIBLE_STUDENTS_PER_CLASS = 10
 # TEACHER APPLICATION FLOW
 # ----------------------
 
+
 class TeacherApplicationView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
+        print("🔥 Incoming Data:", request.data)
         serializer = TeacherApplicationSerializer(data=request.data)
+        
         if serializer.is_valid():
             teacher_app = serializer.save()
 
@@ -86,19 +89,26 @@ class TeacherApplicationView(APIView):
 
             try:
                 send_mail(
-                subject,
-                message,
-                "noreply@ischool.ng",
-                [email],
-                fail_silently=False  # make sure this is False so you can catch real exceptions
-            )
+                    subject,
+                    message,
+                    "noreply@ischool.ng",
+                    [email],
+                    fail_silently=False
+                )
             except Exception as e:
-                logger.error("❌ Email sending failed", exc_info=True)  # logs full traceback to console
+                logger.error("❌ Email sending failed", exc_info=True)
                 return Response(
                     {"error": f"Application saved, but email failed: {str(e)}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-        # ✅ Handle validation errors:
+
+            # ✅ Return success response
+            return Response(
+                {"message": "Application received successfully."},
+                status=status.HTTP_201_CREATED
+            )
+
+        # ❌ Validation failed
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
