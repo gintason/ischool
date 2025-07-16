@@ -189,6 +189,7 @@ class TeacherApplicationStatusView(APIView):
         return Response(serializer.data)
 
 
+
 # ----------------------
 # AUTHENTICATION
 # ----------------------
@@ -197,31 +198,26 @@ class TeacherLoginView(ObtainAuthToken):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        token_key = response.data['token']
-        token, _ = Token.objects.get_or_create(key=token_key)  # ⚠️ Incorrect
+        serializer = self.serializer_class(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
 
-        # 🔁 This line above is wrong — because `key` is *not* the lookup field for creating tokens.
-        # Instead, get the user from the serializer and create/get their token properly like this:
-        user = Token.objects.get(key=token_key).user  # This works only if token exists (risky)
+            if user.role != 'teacher':
+                return Response({'error': 'Not a teacher account.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # ✅ Final correct version:
-        user = self.serializer_class(data=request.data, context={'request': request})
-        user.is_valid(raise_exception=True)
-        user = user.validated_data['user']
-        token, _ = Token.objects.get_or_create(user=user)
+            token, _ = Token.objects.get_or_create(user=user)
 
-        if user.role != 'teacher':
-            return Response({'error': 'Not a teacher account.'}, status=403)
+            return Response({
+                'token': token.key,
+                'user': {
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'role': user.role,
+                }
+            })
 
-        return Response({
-            'token': token.key,
-            'user': {
-                'email': user.email,
-                'full_name': user.full_name,
-                'role': user.role,
-            }
-        })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 
 # ----------------------
