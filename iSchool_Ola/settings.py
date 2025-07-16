@@ -7,6 +7,7 @@ from celery.schedules import crontab
 import logging
 import dj_database_url
 from corsheaders.defaults import default_headers
+from corsheaders.defaults import default_methods
 # Load .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -19,6 +20,10 @@ ALLOWED_HOSTS = [
     "ischool.ng",
     "www.ischool.ng",
     "api.ischool.ng",
+]
+
+CORS_ALLOW_METHODS = list(default_methods) + [
+    'POST',
 ]
 
 # Application definition
