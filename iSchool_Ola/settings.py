@@ -236,3 +236,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Other constants
 SLOT_PRICE_MONTHLY = 10
 SLOT_PRICE_YEARLY = 52000
+
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
