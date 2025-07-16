@@ -46,7 +46,7 @@ from datetime import datetime
 from django.utils.timezone import now
 from .models import OleLesson
 from rest_framework.authentication import TokenAuthentication
-from users.serializers import LiveClassScheduleDetailSerializer
+from users.serializers import LiveClassScheduleDetailSerializer, TeacherEmailLoginSerializer
 from django.core.mail import send_mail
 from django.contrib import messages
 
@@ -189,35 +189,29 @@ class TeacherApplicationStatusView(APIView):
         return Response(serializer.data)
 
 
-
 # ----------------------
 # AUTHENTICATION
 # ----------------------
 
 class TeacherLoginView(ObtainAuthToken):
     permission_classes = [AllowAny]
+    serializer_class = TeacherEmailLoginSerializer
 
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
 
-            if user.role != 'teacher':
-                return Response({'error': 'Not a teacher account.'}, status=status.HTTP_403_FORBIDDEN)
+        token, _ = Token.objects.get_or_create(user=user)
 
-            token, _ = Token.objects.get_or_create(user=user)
-
-            return Response({
-                'token': token.key,
-                'user': {
-                    'email': user.email,
-                    'full_name': user.full_name,
-                    'role': user.role,
-                }
-            })
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response({
+            "token": token.key,
+            "user": {
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+            }
+        })
 
 
 # ----------------------

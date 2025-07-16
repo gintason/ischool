@@ -167,10 +167,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             return False
 
 
-
-
-
-
 class RegistrationGroup(models.Model):
     ACCOUNT_TYPES = [
         ('school', 'School'),

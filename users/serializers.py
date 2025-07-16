@@ -14,6 +14,7 @@ from users.models import OleStudentSubscription  # Adjust import path if needed
 from datetime import date
 from django.utils import timezone
 from .models import OleStudentProfile
+from django.contrib.auth import authenticate
 
 # Custom user serializer for registration
 from rest_framework import serializers
@@ -320,7 +321,6 @@ class LiveClassScheduleDetailSerializer(serializers.ModelSerializer):
             return None
 
 
-
 class LessonHistorySerializer(serializers.ModelSerializer):
     subject = serializers.CharField(source="subject.name")
     class_level = serializers.CharField(source="class_level.name")
@@ -342,3 +342,26 @@ class OleMaterialSerializer(serializers.ModelSerializer):
     class Meta:
         model = OleMaterial
         fields = ["id", "title", "description", "subject", "class_level", "file", "uploaded_at"]
+
+
+class TeacherEmailLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        email = data.get("email")
+        password = data.get("password")
+
+        if not email or not password:
+            raise serializers.ValidationError("Email and password are required.")
+
+        user = authenticate(username=email, password=password)
+
+        if user is None:
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if user.role.lower() != "teacher":
+            raise serializers.ValidationError("Access denied. Not a teacher account.")
+
+        data["user"] = user
+        return data

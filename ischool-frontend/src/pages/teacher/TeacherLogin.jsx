@@ -21,7 +21,7 @@ const TeacherLogin = () => {
 
     try {
       const res = await axiosInstance.post("login/", {
-        username: form.email,
+        email: form.email,
         password: form.password,
       });
 
