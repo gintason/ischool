@@ -52,6 +52,7 @@ from django.contrib import messages
 
 import uuid
 import logging
+from django.contrib.auth import authenticate
 
 logger = logging.getLogger(__name__)
 
@@ -193,14 +194,23 @@ class TeacherApplicationStatusView(APIView):
 # AUTHENTICATION
 # ----------------------
 
-class TeacherLoginView(ObtainAuthToken):
+class TeacherLoginView(APIView):
     permission_classes = [AllowAny]
-    serializer_class = TeacherEmailLoginSerializer
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response({"error": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, username=email, password=password)
+
+        if not user:
+            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if user.role != "teacher":
+            return Response({"error": "Access denied. Not a teacher account."}, status=status.HTTP_403_FORBIDDEN)
 
         token, _ = Token.objects.get_or_create(user=user)
 
@@ -211,8 +221,7 @@ class TeacherLoginView(ObtainAuthToken):
                 "full_name": user.full_name,
                 "role": user.role,
             }
-        })
-
+        }, status=status.HTTP_200_OK)
 
 # ----------------------
 # CLASS SCHEDULE / TIMETABLE
