@@ -20,6 +20,7 @@ from .models import TeacherPayroll, LiveClassSession
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import (
     OleSubject, OleClassLevel, TeacherApplication, LiveClassSchedule,
@@ -61,6 +62,7 @@ VISIBLE_STUDENTS_PER_CLASS = 10
 
 class TeacherApplicationView(APIView):
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
         serializer = TeacherApplicationSerializer(data=request.data)
@@ -84,8 +86,8 @@ class TeacherApplicationView(APIView):
                 send_mail(
                     subject,
                     message,
-                    "noreply@ischool.ng",  # from_email
-                    [email],               # recipient list
+                    "noreply@ischool.ng",
+                    [email],
                 )
             except Exception as e:
                 return Response(
@@ -94,9 +96,12 @@ class TeacherApplicationView(APIView):
                 )
 
             return Response(
-                {"message": "Application submitted successfully, please check your mail for more information."},
+                {"message": "Application submitted successfully. Please check your email."},
                 status=status.HTTP_201_CREATED
             )
+
+        # ✅ Handle validation errors:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 class HireTeacherView(APIView):
