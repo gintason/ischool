@@ -42,7 +42,6 @@ from .serializers import (
 from elibrary.serializers import ELibraryChapterSerializer
 from users.serializers import OleStudentBasicSerializer
 from .utils.password_generator import generate_password
-from emails.sendgrid_email import send_email, BadHeaderError
 from datetime import datetime
 from django.utils.timezone import now
 from .models import OleLesson
