@@ -205,6 +205,11 @@ class RegistrationGroup(models.Model):
             self.state_code = self.state[:2].upper()
         if not self.serial_prefix and self.account_type:
             self.serial_prefix = self.account_type[:3].upper()
+        
+        # ✅ Ensure new subscriptions get 30 days validity if not set
+        if not self.subscription_expires:
+            self.subscription_expires = timezone.now().date() + timedelta(days=30)
+
         super().save(*args, **kwargs)
 
     def decrease_slots(self, count=1):
