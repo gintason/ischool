@@ -319,19 +319,20 @@ class OleStudentRegistrationView(APIView):
 
 
 
-# ole students payment verification and account creation
 class VerifyOleStudentPaymentView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         if not request.data:
+            print("❌ No data in request.")
             return Response({"error": "No data provided."}, status=400)
 
         reference = request.data.get("reference")
         if not reference:
+            print("❌ Missing reference in request.")
             return Response({"error": "Missing reference."}, status=400)
 
-        # 🔍 STEP 1: Verify with Paystack
+        print(f"🔍 Verifying payment with reference: {reference}")
         verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
@@ -340,90 +341,97 @@ class VerifyOleStudentPaymentView(APIView):
         try:
             response = requests.get(verify_url, headers=headers)
             result = response.json()
-            print("✅ PAYSTACK VERIFY RESULT:", json.dumps(result, indent=2))  # 🧪 Log entire response
+            print("✅ PAYSTACK VERIFY RESULT:", json.dumps(result, indent=2))
         except Exception as e:
-            print("❌ Paystack verification error:", str(e))
+            print(f"❌ Error contacting Paystack: {str(e)}")
             return Response({"error": "Verification service unavailable."}, status=502)
 
         if not (result.get("status") and result["data"].get("status") == "success"):
+            print("❌ Payment verification failed or incomplete.")
             return Response({"error": "Payment verification failed or incomplete."}, status=400)
 
-        # 🔍 STEP 2: Extract metadata
         metadata = result["data"].get("metadata", {})
+        print("📦 Extracted Metadata:", json.dumps(metadata, indent=2))
+
         email = metadata.get("email", "").strip().lower()
         full_name = metadata.get("full_name")
         plan_type = metadata.get("plan_type")
         class_level_id = metadata.get("class_level_id")
         subject_ids = metadata.get("subject_ids", [])
 
-        # 🧪 Log the extracted metadata
-        print("📦 Extracted Metadata:", metadata)
-        print("📧 Email:", email)
-        print("👤 Name:", full_name)
-        print("🪪 Plan:", plan_type)
-        print("🎓 Class Level ID:", class_level_id)
-        print("📚 Subject IDs:", subject_ids)
-
         if not email or not full_name or not plan_type or not class_level_id:
-            print("❌ Missing required metadata:", metadata)
+            print("❌ Incomplete metadata from Paystack:", metadata)
             return Response({"error": "Incomplete metadata from Paystack."}, status=400)
 
-        # 🔍 STEP 3: Check if user already exists
-        existing_user = CustomUser.objects.filter(email=email).first()
-        if existing_user:
-            print("ℹ️ User already exists:", existing_user.email)
-            return Response({
-                "message": "Payment verified. Your account is already active.",
-                "email": existing_user.email,
-                "temporary_password": None,
-                "role": existing_user.role
-            }, status=200)
+        print(f"👤 Normalized Email: {email}")
 
-        # 👤 STEP 4: Create new user
-        password = get_random_string(8)
-        try:
-            user = CustomUser.objects.create_user(
-                email=email,
-                full_name=full_name,
-                role="ole_student",
-                password=password,
-                is_active=True,
-            )
-        except IntegrityError:
-            user = CustomUser.objects.get(email=email)
-            return Response({
-                "message": "User already exists. Payment was likely verified already.",
-                "email": user.email,
-                "temporary_password": None,
-                "role": user.role
-            }, status=200)
+        user = CustomUser.objects.filter(email=email).first()
+        new_user_created = False
+        password = None
 
-        # 🎓 STEP 5: Assign class & subjects
+        if user:
+            print(f"🔍 Found existing user: {email}")
+            if user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists():
+                print("✅ Existing user is fully registered.")
+                return Response({
+                    "message": "Payment verified. Your account is already active.",
+                    "email": user.email,
+                    "temporary_password": None,
+                    "role": user.role
+                }, status=200)
+            else:
+                print("⚠️ Existing user is incomplete. Proceeding to complete setup.")
+        else:
+            print("🆕 Creating new user...")
+            password = get_random_string(8)
+            try:
+                user = CustomUser.objects.create_user(
+                    email=email,
+                    full_name=full_name,
+                    role="ole_student",
+                    password=password,
+                    is_active=True,
+                )
+                new_user_created = True
+                print(f"✅ User created: {user.email}")
+            except IntegrityError as e:
+                print(f"❌ IntegrityError during user creation: {e}")
+                return Response({
+                    "error": "User creation failed — possibly due to duplicate or bad data."
+                }, status=400)
+            except Exception as e:
+                print(f"❌ Unexpected error during user creation: {e}")
+                return Response({
+                    "error": f"Unexpected error during user creation: {str(e)}"
+                }, status=500)
+
+        # Step: Assign class and subjects
         try:
-            from teachers.models import OleClassLevel, OleSubject
             class_level = OleClassLevel.objects.get(id=class_level_id)
             subjects = OleSubject.objects.filter(id__in=subject_ids)
             user.ole_class_level = class_level
             user.save()
             user.ole_subjects.set(subjects)
+            print("✅ Class level and subjects assigned.")
         except Exception as e:
-            print("❌ Error assigning class/subjects:", str(e))
+            print(f"❌ Error assigning class/subjects: {e}")
             return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
 
-        # 💳 STEP 6: Create subscription
+        # Step: Create subscription
         try:
             now = timezone.now()
-            duration = timedelta(days=30) if plan_type == "ole_monthly" else timedelta(days=365)
+            duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
             OleStudentSubscription.objects.create(
                 user=user,
                 plan_type=plan_type,
                 end_date=now + duration
             )
+            print("✅ Subscription created successfully.")
         except Exception as e:
-            print("❌ Subscription creation error:", str(e))
+            print(f"❌ Subscription creation failed: {e}")
             return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
 
-        # ✉️ STEP 7: Send welcome email
+        # Step: Send welcome email
         try:
             send_mail(
                 "Welcome to iSchool Ole!",
@@ -434,7 +442,7 @@ Your iSchool Ole account has been successfully created.
 
 Login Details:
 Email: {email}
-Password: {password}
+Password: {password or '[already set]'}
 
 Visit: https://www.ischool.ng/ole-student/login
 
@@ -444,17 +452,17 @@ iSchool Ole Team
                 "noreply@ischool.ng",
                 [email],
             )
+            print("✅ Welcome email sent to:", email)
         except Exception as e:
-            print("📭 Email send error:", e)
+            print(f"❌ Failed to send welcome email: {e}")
 
-        # ✅ STEP 8: Final response
         return Response({
-            "message": "Payment verified and account created.",
+            "message": "Payment verified and account created." if new_user_created else "Account completed successfully.",
             "email": email,
-            "temporary_password": password,
+            "temporary_password": password if new_user_created else None,
             "role": "ole_student"
-        }, status=201)
-    
+        }, status=201 if new_user_created else 200)
+
 
 
 class OleStudentLoginView(LoginView):
