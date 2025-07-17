@@ -195,7 +195,8 @@ LOGGING = {
 PAYSTACK_PUBLIC_KEY = os.getenv('PAYSTACK_LIVE_PUBLIC_KEY')
 PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
 PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
-OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://api.ischool.ng/ole-subscription/verify")
+OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng/ole-subscription/verify")
+
 
 PAYSTACK_PLAN_IDS = {
     #OLE PLAN
