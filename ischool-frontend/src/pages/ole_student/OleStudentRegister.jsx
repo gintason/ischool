@@ -170,7 +170,7 @@ const OleStudentRegister = () => {
                       onChange={handleChange}
                       value={form.plan_type}
                     >
-                      <option value="monthly">Monthly Plan (₦10 )</option>
+                      <option value="monthly">Monthly Plan (₦100)</option>
               
                     </select>
                   </div>
