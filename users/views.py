@@ -316,7 +316,7 @@ class OleStudentRegistrationView(APIView):
             details=f"Paystack init failed: {result.get('message', 'Unknown error')}"
         )
         return Response({"error": result.get("message", "Payment initialization failed.")}, status=400)
-    
+
 
 
 # ole students payment verification and account creation
@@ -331,7 +331,7 @@ class VerifyOleStudentPaymentView(APIView):
         if not reference:
             return Response({"error": "Missing reference."}, status=400)
 
-        # Step 1: Verify with Paystack
+        # 🔍 STEP 1: Verify with Paystack
         verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
@@ -340,14 +340,15 @@ class VerifyOleStudentPaymentView(APIView):
         try:
             response = requests.get(verify_url, headers=headers)
             result = response.json()
-            print("✅ PAYSTACK VERIFY RESULT:", json.dumps(result, indent=2))
-        except Exception:
+            print("✅ PAYSTACK VERIFY RESULT:", json.dumps(result, indent=2))  # 🧪 Log entire response
+        except Exception as e:
+            print("❌ Paystack verification error:", str(e))
             return Response({"error": "Verification service unavailable."}, status=502)
 
         if not (result.get("status") and result["data"].get("status") == "success"):
             return Response({"error": "Payment verification failed or incomplete."}, status=400)
 
-        # Step 2: Extract metadata
+        # 🔍 STEP 2: Extract metadata
         metadata = result["data"].get("metadata", {})
         email = metadata.get("email", "").strip().lower()
         full_name = metadata.get("full_name")
@@ -355,21 +356,22 @@ class VerifyOleStudentPaymentView(APIView):
         class_level_id = metadata.get("class_level_id")
         subject_ids = metadata.get("subject_ids", [])
 
-        print("📧 Email from Paystack metadata:", email)
-        print("👤 Checking if user exists for email:", email)
+        # 🧪 Log the extracted metadata
+        print("📦 Extracted Metadata:", metadata)
+        print("📧 Email:", email)
+        print("👤 Name:", full_name)
+        print("🪪 Plan:", plan_type)
+        print("🎓 Class Level ID:", class_level_id)
+        print("📚 Subject IDs:", subject_ids)
 
-        # Normalize and validate metadata
         if not email or not full_name or not plan_type or not class_level_id:
+            print("❌ Missing required metadata:", metadata)
             return Response({"error": "Incomplete metadata from Paystack."}, status=400)
 
-        email = email.strip().lower()
-        print("📧 Normalized email:", email)
-
-        # Step 3: Check if user already exists
-        try:
-            existing_user = CustomUser.objects.get(email=email)
-            print("👤 Found existing user:", existing_user.email)
-
+        # 🔍 STEP 3: Check if user already exists
+        existing_user = CustomUser.objects.filter(email=email).first()
+        if existing_user:
+            print("ℹ️ User already exists:", existing_user.email)
             return Response({
                 "message": "Payment verified. Your account is already active.",
                 "email": existing_user.email,
@@ -377,10 +379,7 @@ class VerifyOleStudentPaymentView(APIView):
                 "role": existing_user.role
             }, status=200)
 
-        except CustomUser.DoesNotExist:
-            print("🆕 No user found with email:", email)
-
-        # Step 4: Create the user
+        # 👤 STEP 4: Create new user
         password = get_random_string(8)
         try:
             user = CustomUser.objects.create_user(
@@ -399,7 +398,7 @@ class VerifyOleStudentPaymentView(APIView):
                 "role": user.role
             }, status=200)
 
-        # Step 5: Assign class and subjects
+        # 🎓 STEP 5: Assign class & subjects
         try:
             from teachers.models import OleClassLevel, OleSubject
             class_level = OleClassLevel.objects.get(id=class_level_id)
@@ -408,9 +407,10 @@ class VerifyOleStudentPaymentView(APIView):
             user.save()
             user.ole_subjects.set(subjects)
         except Exception as e:
+            print("❌ Error assigning class/subjects:", str(e))
             return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
 
-        # Step 6: Create subscription
+        # 💳 STEP 6: Create subscription
         try:
             now = timezone.now()
             duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
@@ -420,40 +420,42 @@ class VerifyOleStudentPaymentView(APIView):
                 end_date=now + duration
             )
         except Exception as e:
+            print("❌ Subscription creation error:", str(e))
             return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
 
-        # Step 7: Send email
+        # ✉️ STEP 7: Send welcome email
         try:
             send_mail(
                 "Welcome to iSchool Ole!",
                 f"""
-            Hello {full_name},
+Hello {full_name},
 
-            Your iSchool Ole account has been successfully created.
+Your iSchool Ole account has been successfully created.
 
-            Login Details:
-            Email: {email}
-            Password: {password}
+Login Details:
+Email: {email}
+Password: {password}
 
-            Visit: https://www.ischool.ng/ole-student/login
+Visit: https://www.ischool.ng/ole-student/login
 
-            Best regards,  
-            iSchool Ole Team
+Best regards,  
+iSchool Ole Team
                 """,
                 "noreply@ischool.ng",
                 [email],
             )
         except Exception as e:
-            print("Email sending error:", e)
+            print("📭 Email send error:", e)
 
+        # ✅ STEP 8: Final response
         return Response({
             "message": "Payment verified and account created.",
             "email": email,
             "temporary_password": password,
             "role": "ole_student"
         }, status=201)
+    
 
-                    
 
 class OleStudentLoginView(LoginView):
     """
