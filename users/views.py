@@ -413,7 +413,7 @@ class VerifyOleStudentPaymentView(APIView):
         # 💳 STEP 6: Create subscription
         try:
             now = timezone.now()
-            duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
+            duration = timedelta(days=30) if plan_type == "ole_monthly" else timedelta(days=365)
             OleStudentSubscription.objects.create(
                 user=user,
                 plan_type=plan_type,
