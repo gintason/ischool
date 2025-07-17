@@ -316,7 +316,7 @@ class OleStudentRegistrationView(APIView):
             details=f"Paystack init failed: {result.get('message', 'Unknown error')}"
         )
         return Response({"error": result.get("message", "Payment initialization failed.")}, status=400)
-
+    
 
 
 # ole students payment verification and account creation
@@ -358,18 +358,27 @@ class VerifyOleStudentPaymentView(APIView):
         print("📧 Email from Paystack metadata:", email)
         print("👤 Checking if user exists for email:", email)
 
+        # Normalize and validate metadata
         if not email or not full_name or not plan_type or not class_level_id:
             return Response({"error": "Incomplete metadata from Paystack."}, status=400)
 
+        email = email.strip().lower()
+        print("📧 Normalized email:", email)
+
         # Step 3: Check if user already exists
-        existing_user = CustomUser.objects.filter(email=email).first()
-        if existing_user:
+        try:
+            existing_user = CustomUser.objects.get(email=email)
+            print("👤 Found existing user:", existing_user.email)
+
             return Response({
                 "message": "Payment verified. Your account is already active.",
                 "email": existing_user.email,
                 "temporary_password": None,
                 "role": existing_user.role
             }, status=200)
+
+        except CustomUser.DoesNotExist:
+            print("🆕 No user found with email:", email)
 
         # Step 4: Create the user
         password = get_random_string(8)
@@ -430,10 +439,10 @@ class VerifyOleStudentPaymentView(APIView):
 
             Best regards,  
             iSchool Ole Team
-                    """,
-                    "noreply@ischool.ng",  # <-- from_email required!
-                     [email],               # <-- recipient list must be a list
-                )
+                """,
+                "noreply@ischool.ng",
+                [email],
+            )
         except Exception as e:
             print("Email sending error:", e)
 
@@ -443,9 +452,8 @@ class VerifyOleStudentPaymentView(APIView):
             "temporary_password": password,
             "role": "ole_student"
         }, status=201)
-                    
-    
 
+                    
 
 class OleStudentLoginView(LoginView):
     """
