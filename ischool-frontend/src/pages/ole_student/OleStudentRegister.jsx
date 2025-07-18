@@ -14,7 +14,7 @@ const OleStudentRegister = () => {
   const [form, setForm] = useState({
     full_name: '',
     email: '',
-    plan_type: 'ole_monthly',
+    plan_type: 'monthly',
     class_level_id: '',
     subject_ids: [],
   });

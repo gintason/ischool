@@ -200,7 +200,7 @@ OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.is
 
 PAYSTACK_PLAN_IDS = {
     #OLE PLAN, Tetst Mode pls rememember to change to live mode
-    "ole_monthly": "PLN_8zqxfh5dmamqena",
+    "monthly": "PLN_8zqxfh5dmamqena",
 
     #OLA PLANS
     "ola_monthly": "PLN_ggznevdmbw5pjb4",
@@ -210,7 +210,7 @@ PAYSTACK_PLAN_IDS = {
 
 PAYSTACK_PLAN_AMOUNTS = {
     #Ole plan amounts
-    "ole_monthly": 10000,
+    "monthly": 10000,
 
     #Ola plans amounts
     "ola_monthly": 610000,

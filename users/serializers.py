@@ -162,7 +162,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     
 
 OLE_PLAN_CHOICES = [
-    ('ole_monthly', 'Monthly'),
+    ('monthly', 'Monthly'),
 ]
 
 class OleStudentRegistrationSerializer(serializers.Serializer):

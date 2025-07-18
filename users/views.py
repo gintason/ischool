@@ -263,8 +263,8 @@ class OleStudentRegistrationView(APIView):
 
         # ✅ DO NOT create user here anymore — let payment verification handle it
 
-        plan_id = settings.PAYSTACK_PLAN_IDS.get("ole_monthly")
-        amount = settings.PAYSTACK_PLAN_AMOUNTS.get("ole_monthly")
+        plan_id = settings.PAYSTACK_PLAN_IDS.get("monthly")
+        amount = settings.PAYSTACK_PLAN_AMOUNTS.get("monthly")
 
         if not plan_id or not amount:
             return Response({"error": "Invalid plan type selected."}, status=400)
