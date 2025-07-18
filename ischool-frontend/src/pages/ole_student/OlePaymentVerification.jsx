@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 
+
 const OlePaymentVerify = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ const OlePaymentVerify = () => {
 
     const verifyPayment = async () => {
       try {
-        const response = await axios.post("/api/users/ole-student/verify-payment/", {
+        const response = await axios.post("https://api.ischool.ng/api/users/ole-student/verify-payment/", {
           reference
         });
 
