@@ -160,6 +160,11 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_ALL_ORIGINS = False
 
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.ischool\.ng$",
+]
+
+
 
 CSRF_TRUSTED_ORIGINS = [
     "https://www.ischool.ng",
