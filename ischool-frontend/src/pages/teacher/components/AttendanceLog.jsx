@@ -5,7 +5,7 @@ const AttendanceLog = () => {
   const [log, setLog] = useState([]);
 
   useEffect(() => {
-    axios.get('/api/teachers/latest-attendance/')
+    axios.get('https://api.ischool.ng/api/teachers/latest-attendance/')
       .then(res => setLog(res.data))
       .catch(err => console.error(err));
   }, []);

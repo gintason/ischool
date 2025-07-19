@@ -5,14 +5,14 @@ const UpcomingClasses = () => {
   const [groupedClasses, setGroupedClasses] = useState([]);
 
   useEffect(() => {
-    axios.get('/api/teachers/upcoming-classes/')
+    axios.get('https://api.ischool.ng/api/teachers/upcoming-classes/')
       .then(res => setGroupedClasses(res.data))
       .catch(err => console.error(err));
   }, []);
 
   const startClass = async (scheduleId) => {
     try {
-      const res = await axios.post(`/api/teachers/start-class/${scheduleId}/`);
+      const res = await axios.post(`https://api.ischool.ng/api/teachers/start-class/${scheduleId}/`);
       alert("Class started. Meeting link: " + res.data.meeting_link);
     } catch (err) {
       console.error(err);

@@ -15,7 +15,7 @@ const Timetable = () => {
   const token = rawToken.trim();
   console.log("🔐 Timetable token:", token);
 
-  axios.get('/api/teachers/daily-timetable/', {
+  axios.get('https://api.ischool.ng/api/teachers/daily-timetable/', {
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",

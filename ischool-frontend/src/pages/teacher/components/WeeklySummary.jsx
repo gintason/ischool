@@ -5,7 +5,7 @@ const WeeklySummary = () => {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    axios.get('/api/teachers/weekly-summary/')
+    axios.get('https://api.ischool.ng/api/teachers/weekly-summary/')
       .then(res => setSummary(res.data))
       .catch(err => console.error(err));
   }, []);
