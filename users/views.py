@@ -464,7 +464,7 @@ iSchool Ole Team
             logger.info(f"❌ Failed to send welcome email: {e}")
 
         return Response({
-            "message": "Payment verified and account created." if new_user_created else "Account completed successfully.",
+            "message": "Payment verified and account created." if new_user_created else "Account completed successfully. Please copy your email and Password to login",
             "email": email,
             "temporary_password": password if new_user_created else None,
             "role": "ole_student"
