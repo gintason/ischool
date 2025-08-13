@@ -103,7 +103,7 @@ def initiate_payment(request):
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        "callback_url": "https://api.ischool.ng/payment-verify",  # ✅ Update this in production
+        "callback_url": "https://api.ischool.ng/api/payments/verify-and-register/",  # ✅ Update this in production
         "email": data["email"],
         "metadata": {
             "account_type": data["account_type"],
