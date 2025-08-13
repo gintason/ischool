@@ -14,7 +14,6 @@ import slide1 from "../../assets/oleslide1.jpg";
 import slide2 from "../../assets/oleslide2.jpg";
 import olehside from "../../assets/olehside.jpg";
 
-
 const OleHomePage = () => {
 
   useEffect(() => {

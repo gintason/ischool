@@ -79,7 +79,6 @@ def verify_paystack_payment(request):
 
 
 
-
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def initiate_payment(request):
