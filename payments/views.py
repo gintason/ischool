@@ -84,7 +84,7 @@ def verify_paystack_payment(request):
 def initiate_payment(request):
     data = request.data
 
-    required_fields = ["account_type", "email", "state", "num_slots", "billing_cycle"]
+    required_fields = ["account_type", "email", "state", "num_slots", "billing_cycle", "callback_url"]
     if not all(data.get(field) for field in required_fields):
         return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -103,7 +103,7 @@ def initiate_payment(request):
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        "callback_url": "https://api.ischool.ng/payment-verify",  # ✅ Update this in production
+        "callback_url": data["callback_url"], 
         "email": data["email"],
         "metadata": {
             "account_type": data["account_type"],
