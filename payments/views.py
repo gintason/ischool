@@ -24,6 +24,7 @@ from django.contrib import messages
 from datetime import timedelta
 from django.shortcuts import redirect
 from django.http import HttpResponseBadRequest
+from django.http import HttpResponse
 
 
 pwo = PasswordGenerator()
@@ -329,13 +330,25 @@ iSchool Ola Team
 
 
 def payment_callback(request):
-    # Paystack sends ?reference=<id>&trxref=<id>
     reference = request.GET.get("reference") or request.GET.get("trxref")
     slots = request.GET.get("slots")
 
     if not reference:
-        return HttpResponseBadRequest("Missing transaction reference")
+        return HttpResponse("Missing reference", status=400)
 
-    # ✅ Redirect to your deep link with the reference
     deep_link_url = f"ischoolmobile://payment-success?reference={reference}&slots={slots or ''}"
-    return redirect(deep_link_url)
+
+    html = f"""
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="0;url={deep_link_url}" />
+        <script>
+          window.location.href = "{deep_link_url}";
+        </script>
+      </head>
+      <body>
+        Redirecting to iSchool Mobile...
+      </body>
+    </html>
+    """
+    return HttpResponse(html)
