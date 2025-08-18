@@ -347,6 +347,6 @@ def payment_callback(request):
 
     if data.get("status") and data["data"]["status"] == "success":
         # Redirect user to mobile/web frontend
-        return redirect(f"ischool://payment-success?slots={slots}&reference={reference}")
+        return redirect(f"ischoolmobile://payment-success?slots={slots}&reference={reference}")
     else:
-        return redirect(f"ischool://payment-failed?reference={reference}")
+        return redirect(f"ischoolmobile://payment-failed?reference={reference}")
