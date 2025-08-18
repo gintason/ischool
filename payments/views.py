@@ -328,14 +328,14 @@ iSchool Ola Team
     }, status=status.HTTP_201_CREATED)
 
 
-
 def payment_callback(request):
-    transaction_id = request.GET.get("transaction_id")
+    # Paystack sends ?reference=<id>&trxref=<id>
+    reference = request.GET.get("reference") or request.GET.get("trxref")
     slots = request.GET.get("slots")
 
-    if not transaction_id:
-        return HttpResponseBadRequest("Missing transaction_id")
+    if not reference:
+        return HttpResponseBadRequest("Missing transaction reference")
 
-    # ✅ Redirect to your deep link (mobile app will catch this)
-    deep_link_url = f"ischoolmobile://payment-success?transaction_id={transaction_id}&slots={slots or ''}"
+    # ✅ Redirect to your deep link with the reference
+    deep_link_url = f"ischoolmobile://payment-success?reference={reference}&slots={slots or ''}"
     return redirect(deep_link_url)
