@@ -25,6 +25,7 @@ from datetime import timedelta
 from django.shortcuts import redirect
 from django.http import HttpResponseBadRequest
 from django.http import HttpResponse
+from django.http import JsonResponse
 
 
 pwo = PasswordGenerator()
@@ -329,26 +330,23 @@ iSchool Ola Team
     }, status=status.HTTP_201_CREATED)
 
 
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def payment_callback(request):
-    reference = request.GET.get("reference") or request.GET.get("trxref")
-    slots = request.GET.get("slots")
+    reference = request.GET.get('reference')
+    slots = request.GET.get('slots')
 
     if not reference:
-        return HttpResponse("Missing reference", status=400)
+        return JsonResponse({"error": "No transaction reference found."}, status=400)
 
-    deep_link_url = f"ischoolmobile://payment-success?reference={reference}&slots={slots or ''}"
+    # Verify payment with Paystack
+    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    res = requests.get(url, headers=headers)
+    data = res.json()
 
-    html = f"""
-    <html>
-      <head>
-        <meta http-equiv="refresh" content="0;url={deep_link_url}" />
-        <script>
-          window.location.href = "{deep_link_url}";
-        </script>
-      </head>
-      <body>
-        Redirecting to iSchool Mobile...
-      </body>
-    </html>
-    """
-    return HttpResponse(html)
+    if data.get("status") and data["data"]["status"] == "success":
+        # Redirect user to mobile/web frontend
+        return redirect(f"ischool://payment-success?slots={slots}&reference={reference}")
+    else:
+        return redirect(f"ischool://payment-failed?reference={reference}")
