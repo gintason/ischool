@@ -22,6 +22,8 @@ import json
 from django.core.mail import send_mail
 from django.contrib import messages
 from datetime import timedelta
+from django.shortcuts import redirect
+from django.http import HttpResponseBadRequest
 
 
 pwo = PasswordGenerator()
@@ -88,22 +90,29 @@ def initiate_payment(request):
     if not all(data.get(field) for field in required_fields):
         return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Generate a unique transaction reference
     tx_ref = str(uuid.uuid4())
-    num_slots = int(data.get("num_slots", 1))
+    num_slots = int(data.get("num_slots", 1))  # ✅ keep this as your slots variable
 
+    # Validate billing cycle
     billing_cycle = data.get("billing_cycle", "monthly").lower()
     if billing_cycle not in ["monthly", "yearly"]:
         billing_cycle = "monthly"
 
+    # Calculate amount
     slot_price = settings.SLOT_PRICE_MONTHLY if billing_cycle == "monthly" else settings.SLOT_PRICE_YEARLY
     amount = num_slots * slot_price
     amount_in_kobo = int(amount * 100)
+
+    # ✅ Step 3 Integration: Append transaction_id & slots to callback_url
+    callback_url = f"{data['callback_url']}?transaction_id={tx_ref}&slots={num_slots}"
 
     payload = {
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        "callback_url": data["callback_url"], 
+        # ✅ use num_slots here instead of undefined slots
+        "callback_url": f"https://api.ischool.ng/api/payments/payment-callback/?slots={num_slots}",
         "email": data["email"],
         "metadata": {
             "account_type": data["account_type"],
@@ -124,11 +133,28 @@ def initiate_payment(request):
     try:
         response = requests.post("https://api.paystack.co/transaction/initialize", json=payload, headers=headers)
         result = response.json()
+
         if result.get("status") is True:
+            # ✅ Add initiation_data for mobile apps without affecting web
             return Response({
                 "payment_link": result["data"]["authorization_url"],
-                "tx_ref": tx_ref
+                "tx_ref": tx_ref,
+                "initiation_data": {
+                    "transaction_id": tx_ref,
+                    "tx_ref": tx_ref,
+                    "email": data["email"],
+                    "account_type": data["account_type"],
+                    "name": data.get("name"),
+                    "location": data.get("location"),
+                    "state": data["state"],
+                    "slots": num_slots,
+                    "billing_cycle": billing_cycle,
+                    "referral_code": data.get("referral_code", ""),
+                    "account_details": data.get("account_details", ""),
+                    "studentDetails": data.get("studentDetails", []),
+                }
             }, status=status.HTTP_200_OK)
+
         return Response({"error": result.get("message", "Payment initiation failed.")}, status=status.HTTP_400_BAD_REQUEST)
 
     except Exception as e:
@@ -137,74 +163,67 @@ def initiate_payment(request):
 
 
 
+
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def verify_and_register(request):
-    print("Incoming data:", request.data)
+    logger.info("Incoming payment verification request: %s", request.data)
+
     data = request.data
-    transaction_id = data.get("transaction_id")
-    tx_ref = data.get("tx_ref")
+
+    # Extract fields
+    transaction_id = data.get("transaction_id")  # This should match Paystack's reference
+    tx_ref = data.get("tx_ref") or transaction_id
     email = data.get("email")
     account_type = data.get("account_type")
     state = data.get("state")
     name = data.get("name")
     location = data.get("location")
     slots = int(data.get("slots", 1))
-    referral_code = data.get("referral_code", "").strip()
-    account_details = data.get("account_details", "").strip()
+    referral_code = (data.get("referral_code") or "").strip()
+    account_details = (data.get("account_details") or "").strip()
+    billing_cycle = data.get("billing_cycle", "monthly").lower()
     student_details = data.get("studentDetails", [])
 
-
+    # Parse student details if string
     if isinstance(student_details, str):
         try:
             student_details = json.loads(student_details)
         except json.JSONDecodeError:
             return Response({"detail": "Invalid format for student details."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ✅ Check for required fields and return specific missing ones
+    # Required fields check
     required_fields = ["transaction_id", "tx_ref", "email", "account_type", "name", "location", "state"]
     missing = [field for field in required_fields if not data.get(field)]
     if missing:
-        return Response(
-            {"detail": f"Missing required fields: {', '.join(missing)}"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({"detail": f"Missing required fields: {', '.join(missing)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-
+    # Slot count validation
     if len(student_details) != slots:
         return Response({"detail": "Number of student details does not match the number of slots."},
                         status=status.HTTP_400_BAD_REQUEST)
 
+    # Prevent duplicate verification
     if PaymentTransaction.objects.filter(transaction_id=transaction_id).exists():
         return Response({"detail": "Transaction already verified."}, status=status.HTTP_200_OK)
 
-    transaction_id = data.get("transaction_id")  # ✅ This is Paystack's reference
-    logger.info(f"Received transaction_id: {transaction_id}")  # ✅ Add this line
-    url = f"https://api.paystack.co/transaction/verify/{transaction_id}"
-    headers = {
-        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"
-    }
+    # Verify with Paystack
+    paystack_url = f"https://api.paystack.co/transaction/verify/{transaction_id}"
+    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
 
     try:
-        res = requests.get(url, headers=headers)
+        res = requests.get(paystack_url, headers=headers)
         res_data = res.json()
-
-        logger.info(f"Paystack verification response: {res_data}")
-
+        logger.info("Paystack verification response: %s", res_data)
     except Exception as e:
-        logger.error(f"Paystack verification failed: {e}")
-        return Response({"detail": f"Paystack verification failed: {str(e)}"},
-                        status=status.HTTP_502_BAD_GATEWAY)
+        logger.error("Paystack verification failed: %s", e)
+        return Response({"detail": f"Paystack verification failed: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
 
-    if res_data.get("status") is not True:
-        logger.error(f"Transaction verification failed. Response: {res_data}")
+    if not res_data.get("status"):
         return Response({"detail": "Transaction verification failed."}, status=status.HTTP_400_BAD_REQUEST)
 
-    data_info = res_data.get("data", {})
-    amount_paid = float(data_info.get("amount", 0)) / 100
-
-    # ✅ Handle billing cycle
-    billing_cycle = data.get("billing_cycle", "monthly").lower()
+    # Amount check
+    amount_paid = float(res_data.get("data", {}).get("amount", 0)) / 100
     if billing_cycle not in ["monthly", "yearly"]:
         billing_cycle = "monthly"
 
@@ -212,9 +231,9 @@ def verify_and_register(request):
     expected_amount = slots * slot_price
 
     if amount_paid < expected_amount:
-        return Response({"detail": "Amount paid does not match expected slot payment."},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": "Amount paid does not match expected slot payment."}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Create group and users atomically
     with transaction.atomic():
         group = RegistrationGroup.objects.create(
             account_type=account_type,
@@ -239,51 +258,45 @@ def verify_and_register(request):
         )
 
         created_users = []
+        account_type_to_role = {"school": "student", "home": "student", "referral": "student"}
 
-    registration_email = request.data.get("email")
+        for i, student in enumerate(student_details):
+            full_name = student.get("fullName", f"{account_type.capitalize()} User {i+1}")
+            student_email = student.get("email")
 
-    account_type_to_role = {
-        "school": "student",
-        "home": "student",
-        "referral": "student"
-    }
+            if not student_email:
+                transaction.set_rollback(True)
+                return Response({"detail": f"Missing email for student {i+1}."}, status=status.HTTP_400_BAD_REQUEST)
 
-    for i, student in enumerate(student_details):
-        full_name = student.get("fullName", f"{account_type.capitalize()} User {i+1}")
-        student_email = student.get("email")
-        if not student_email:
-            return Response({"detail": f"Missing email for student {i+1}."}, status=status.HTTP_400_BAD_REQUEST)
+            if CustomUser.objects.filter(email=student_email).exists():
+                transaction.set_rollback(True)
+                return Response({"detail": f"A user with email '{student_email}' already exists. Please use a different email."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-        username = f"{account_type[:2].upper()}{timezone.now().strftime('%H%M%S%f')}{i}"
-        password = pwo.generate()
-        role = account_type_to_role.get(account_type, "student")
+            username = f"{account_type[:2].upper()}{timezone.now().strftime('%H%M%S%f')}{i}"
+            password = pwo.generate()
+            role = account_type_to_role.get(account_type, "student")
 
-        if CustomUser.objects.filter(email=student_email).exists():
-            transaction.set_rollback(True)
-            return Response(
-                {"detail": f"A user with email '{student_email}' already exists. Please use a different email."},
-                status=status.HTTP_400_BAD_REQUEST
+            user = CustomUser.objects.create_user(
+                email=student_email,
+                password=password,
+                role=role,
+                full_name=full_name,
+                username=username,
+                registration_group=group
             )
 
-        user = CustomUser.objects.create_user(
-            email=student_email,
-            password=password,
-            role=role,
-            full_name=full_name,
-            username=username,
-            registration_group=group
-        )
+            created_users.append({
+                "username": username,
+                "password": password,
+                "full_name": full_name,
+                "email": student_email
+            })
 
-        created_users.append({
-            "username": username,
-            "password": password,
-            "full_name": full_name,
-            "email": student_email
-        })
-
+    # Send login details email
     login_details = "\n\n".join(
-        f"{user['full_name']} ({user['email']})\nUsername: {user['username']}\nPassword: {user['password']}"
-        for user in created_users
+        f"{u['full_name']} ({u['email']})\nUsername: {u['username']}\nPassword: {u['password']}"
+        for u in created_users
     )
 
     try:
@@ -301,12 +314,11 @@ Best regards,
 iSchool Ola Team
 """,
             from_email="noreply@ischool.ng",
-            recipient_list=[registration_email],
+            recipient_list=[email],
             fail_silently=False,
         )
-
     except Exception as e:
-        print(f"Error sending email to {registration_email}: {e}")
+        logger.error("Error sending email to %s: %s", email, e)
 
     return Response({
         "detail": "Registration successful.",
@@ -314,3 +326,16 @@ iSchool Ola Team
         "group_id": group.id,
         "slots": slots
     }, status=status.HTTP_201_CREATED)
+
+
+
+def payment_callback(request):
+    transaction_id = request.GET.get("transaction_id")
+    slots = request.GET.get("slots")
+
+    if not transaction_id:
+        return HttpResponseBadRequest("Missing transaction_id")
+
+    # ✅ Redirect to your deep link (mobile app will catch this)
+    deep_link_url = f"ischoolmobile://payment-success?transaction_id={transaction_id}&slots={slots or ''}"
+    return redirect(deep_link_url)
