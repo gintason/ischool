@@ -349,6 +349,6 @@ def payment_callback(request):
 
     if data.get("status") and data["data"]["status"] == "success":
         # Use HttpResponseRedirect instead of redirect()
-        return HttpResponseRedirect("https://www.ischool.ng")
+        return HttpResponseRedirect(f"ischoolmobile://payment-success?reference={reference}&slots={slots}")
     else:
-        return HttpResponseRedirect("https://www.ischool.ng/ola_home")
+        return HttpResponseRedirect(f"ischoolmobile://payment-failed?reference={reference}")
