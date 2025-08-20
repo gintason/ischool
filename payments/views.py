@@ -27,6 +27,8 @@ from django.http import HttpResponseBadRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
 
+from django.http import HttpResponseRedirect  # <-- Add this import
+
 
 pwo = PasswordGenerator()
 pwo.minlen = 8
@@ -346,7 +348,7 @@ def payment_callback(request):
     data = res.json()
 
     if data.get("status") and data["data"]["status"] == "success":
-        # Redirect to mobile app with CORRECT parameters
-        return redirect(f"ischoolmobile://payment-success?reference={reference}&slots={slots}")
+        # Use HttpResponseRedirect instead of redirect()
+        return HttpResponseRedirect(f"ischoolmobile://payment-success?reference={reference}&slots={slots}")
     else:
-        return redirect(f"ischoolmobile://payment-failed?reference={reference}")
+        return HttpResponseRedirect(f"ischoolmobile://payment-failed?reference={reference}")
