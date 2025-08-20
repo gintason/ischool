@@ -348,7 +348,41 @@ def payment_callback(request):
     data = res.json()
 
     if data.get("status") and data["data"]["status"] == "success":
-        # Use HttpResponseRedirect instead of redirect()
-        return HttpResponseRedirect(f"ischoolmobile://payment-success?reference={reference}&slots={slots}")
+        # Use HTML meta refresh to redirect to the app
+        redirect_url = f"ischoolmobile://payment-success?reference={reference}&slots={slots}"
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Redirecting to App</title>
+                <meta http-equiv="refresh" content="0; url={redirect_url}">
+            </head>
+            <body>
+                <p>Payment successful! <a href="{redirect_url}">Click here</a> to return to the app.</p>
+                <script>
+                    window.location.href = "{redirect_url}";
+                </script>
+            </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type="text/html")
     else:
-        return HttpResponseRedirect(f"ischoolmobile://payment-failed?reference={reference}")
+        redirect_url = f"ischoolmobile://payment-failed?reference={reference}"
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Redirecting to App</title>
+                <meta http-equiv="refresh" content="0; url={redirect_url}">
+            </head>
+            <body>
+                <p>Payment failed! <a href="{redirect_url}">Click here</a> to return to the app.</p>
+                <script>
+                    window.location.href = "{redirect_url}";
+                </script>
+            </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type="text/html")
