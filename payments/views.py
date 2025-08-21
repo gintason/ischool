@@ -348,8 +348,8 @@ def payment_callback(request):
     data = res.json()
 
     if data.get("status") and data["data"]["status"] == "success":
-        # Use HTML meta refresh to redirect to the app
-        redirect_url = f"ischoolmobile://payment-success?reference={reference}&slots={slots}"
+        # ✅ Notice the /callback/ prefix
+        redirect_url = f"ischoolmobile://callback/payment-success?reference={reference}&slots={slots}"
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -368,7 +368,7 @@ def payment_callback(request):
         """
         return HttpResponse(html_content, content_type="text/html")
     else:
-        redirect_url = f"ischoolmobile://payment-failed?reference={reference}"
+        redirect_url = f"ischoolmobile://callback/payment-failed?reference={reference}"
         html_content = f"""
         <!DOCTYPE html>
         <html>
