@@ -96,7 +96,7 @@ def initiate_payment(request):
 
     # Generate a unique transaction reference
     tx_ref = str(uuid.uuid4())
-    num_slots = int(data.get("num_slots", 1))  # ✅ keep this as your slots variable
+    num_slots = int(data.get("num_slots", 1))
 
     # Validate billing cycle
     billing_cycle = data.get("billing_cycle", "monthly").lower()
@@ -108,15 +108,16 @@ def initiate_payment(request):
     amount = num_slots * slot_price
     amount_in_kobo = int(amount * 100)
 
-    # ✅ Step 3 Integration: Append transaction_id & slots to callback_url
-    callback_url = f"{data['callback_url']}?transaction_id={tx_ref}&slots={num_slots}"
+    # ✅ CRITICAL FIX: Use the SAME callback URL format that your frontend expects
+    # The callback_url from frontend should be: "https://api.ischool.ng/api/payments/callback/"
+    callback_url_with_params = f"{data['callback_url']}?reference={tx_ref}&slots={num_slots}"
 
     payload = {
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        # ✅ use num_slots here instead of undefined slots
-        "callback_url": f"https://api.ischool.ng/api/payments/payment-callback/?slots={num_slots}",
+        # ✅ Use the consistent callback URL with parameters
+        "callback_url": callback_url_with_params,
         "email": data["email"],
         "metadata": {
             "account_type": data["account_type"],
@@ -139,7 +140,6 @@ def initiate_payment(request):
         result = response.json()
 
         if result.get("status") is True:
-            # ✅ Add initiation_data for mobile apps without affecting web
             return Response({
                 "payment_link": result["data"]["authorization_url"],
                 "tx_ref": tx_ref,
@@ -164,7 +164,6 @@ def initiate_payment(request):
     except Exception as e:
         logger.error(f"Payment initiation error: {e}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 
