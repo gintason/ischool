@@ -176,10 +176,6 @@ def verify_and_register(request):
     logger.info("Incoming payment verification request: %s", request.data)
     logger.info("Request headers: %s", request.headers)
 
-    logger.info("Raw request body: %s", request.body)
-
-    logger.info("Incoming payment verification request: %s", request.data)
-
     data = request.data
 
     # Extract fields
