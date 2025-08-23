@@ -28,6 +28,8 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 
 from django.http import HttpResponseRedirect  # <-- Add this import
+from django.views.decorators.csrf import csrf_exempt
+
 
 
 pwo = PasswordGenerator()
@@ -170,6 +172,12 @@ def initiate_payment(request):
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def verify_and_register(request):
+
+    logger.info("Incoming payment verification request: %s", request.data)
+    logger.info("Request headers: %s", request.headers)
+
+    logger.info("Raw request body: %s", request.body)
+
     logger.info("Incoming payment verification request: %s", request.data)
 
     data = request.data
@@ -331,57 +339,117 @@ iSchool Ola Team
     }, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET'])
+
+logger = logging.getLogger(__name__)
+
+# Add POST to allow Paystack's webhook, and GET for the browser redirect
+@api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
+@csrf_exempt  # This is crucial for Paystack's webhook to work
 def payment_callback(request):
-    reference = request.GET.get('reference')
-    slots = request.GET.get('slots')
+    logger.info("Incoming payment callback request: %s", request.method)
+    logger.info("Request data: %s", request.data)
+    logger.info("Request query parameters: %s", request.GET)
 
-    if not reference:
-        return JsonResponse({"error": "No transaction reference found."}, status=400)
+    # Paystack's webhook sends a POST request with the reference in the body
+    # The user's browser redirect sends a GET request with the reference in the URL
+    if request.method == 'POST':
+        # Handle the webhook from Paystack
+        try:
+            payload = json.loads(request.body)
+            # You might need to verify the signature of the webhook
+            # This is an optional but highly recommended security step
+            event = payload.get("event")
+            if event != "charge.success":
+                # We only care about successful charges
+                return JsonResponse({"status": "ignored"}, status=status.HTTP_200_OK)
 
-    # Verify payment with Paystack
-    headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-    url = f"https://api.paystack.co/transaction/verify/{reference}"
-    res = requests.get(url, headers=headers)
-    data = res.json()
+            reference = payload.get("data", {}).get("reference")
+            # For the webhook, we don't have the slots. This webhook is
+            # primarily for server-to-server verification.
+            # Your app's deep link method is more reliable for passing slots.
 
-    if data.get("status") and data["data"]["status"] == "success":
-        # Use HTML meta refresh to redirect to the app
-        redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots}&status=success"
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="utf-8">
-                <title>Redirecting to App</title>
-                <meta http-equiv="refresh" content="0; url={redirect_url}">
-            </head>
-            <body>
-                <p>Payment successful! <a href="{redirect_url}">Click here</a> to return to the app.</p>
-                <script>
-                    window.location.href = "{redirect_url}";
-                </script>
-            </body>
-        </html>
-        """
-        return HttpResponse(html_content, content_type="text/html")
-    else:
-        redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=failed"
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="utf-8">
-                <title>Redirecting to App</title>
-                <meta http-equiv="refresh" content="0; url={redirect_url}">
-            </head>
-            <body>
-                <p>Payment failed! <a href="{redirect_url}">Click here</a> to return to the app.</p>
-                <script>
-                    window.location.href = "{redirect_url}";
-                </script>
-            </body>
-        </html>
-        """
-        return HttpResponse(html_content, content_type="text/html")
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'GET':
+        # Handle the browser redirect from Paystack
+        reference = request.GET.get('reference')
+        slots = request.GET.get('slots')
+
+        # The slots parameter is crucial, so we should handle its absence gracefully
+        if not slots:
+            slots_to_pass = "1"  # Default to 1 slot if not provided, or handle as an error
+            logger.warning("Slots parameter missing from GET request. Defaulting to 1.")
+        else:
+            slots_to_pass = slots
+
+        if not reference:
+            logger.error("No transaction reference found in GET request.")
+            return JsonResponse({"error": "No transaction reference found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The rest of the logic should apply to both GET and POST for simplicity
+        # of redirecting, but the `reference` is coming from different places.
+        # For simplicity, let's keep the verification logic tied to the GET method,
+        # as it's the one that triggers the final app-side registration.
+
+        # Verify payment with Paystack
+        headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+        url = f"https://api.paystack.co/transaction/verify/{reference}"
+
+        try:
+            res = requests.get(url, headers=headers)
+            res.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+            data = res.json()
+            logger.info("Paystack verification response: %s", data)
+        except requests.exceptions.RequestException as e:
+            logger.error("Paystack verification request failed: %s", e)
+            return JsonResponse({"error": "Failed to communicate with Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid response from Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Check if the payment was a success
+        if data.get("status") and data["data"].get("status") == "success":
+            # Use HTML meta refresh to redirect to the app
+            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Redirecting to App</title>
+                    <meta http-equiv="refresh" content="0; url={redirect_url}">
+                </head>
+                <body>
+                    <p>Payment successful! <a href="{redirect_url}">Click here</a> to return to the app.</p>
+                    <script>
+                        window.location.href = "{redirect_url}";
+                    </script>
+                </body>
+            </html>
+            """
+            return HttpResponse(html_content, content_type="text/html")
+        else:
+            # Payment failed or was not successful
+            logger.error("Paystack transaction was not successful. Status: %s", data.get("data", {}).get("status"))
+            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=failed"
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Redirecting to App</title>
+                    <meta http-equiv="refresh" content="0; url={redirect_url}">
+                </head>
+                <body>
+                    <p>Payment failed! <a href="{redirect_url}">Click here</a> to return to the app.</p>
+                    <script>
+                        window.location.href = "{redirect_url}";
+                    </script>
+                </body>
+            </html>
+            """
+            return HttpResponse(html_content, content_type="text/html")
+    
+    # Return a 405 for any other method
+    return JsonResponse({"detail": "Method not allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
