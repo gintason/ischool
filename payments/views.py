@@ -112,8 +112,13 @@ def initiate_payment(request):
 
     # ✅ CRITICAL FIX: Use the SAME callback URL format that your frontend expects
     # The callback_url from frontend should be: "https://api.ischool.ng/api/payments/callback/"
-    callback_url_with_params = f"{data['callback_url']}?reference={tx_ref}&slots={num_slots}"
-
+    base_callback_url = data['callback_url']
+     # Ensure the base URL has a trailing slash for consistency
+    if not base_callback_url.endswith('/'):
+        base_callback_url += '/'
+        
+    callback_url_with_params = f"{base_callback_url}?reference={tx_ref}&slots={num_slots}"
+    
     payload = {
         "reference": tx_ref,
         "amount": amount_in_kobo,
@@ -352,7 +357,7 @@ def payment_callback(request):
     if request.method == 'POST':
         # Handle the webhook from Paystack
         try:
-            payload = json.loads(request.body)
+            payload = request.data
             # You might need to verify the signature of the webhook
             # This is an optional but highly recommended security step
             event = payload.get("event")
