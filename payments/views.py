@@ -26,10 +26,11 @@ from django.shortcuts import redirect
 from django.http import HttpResponseBadRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
+import hmac
+import hashlib
 
 from django.http import HttpResponseRedirect  # <-- Add this import
 from django.views.decorators.csrf import csrf_exempt
-
 
 
 pwo = PasswordGenerator()
@@ -341,8 +342,17 @@ iSchool Ola Team
 logger = logging.getLogger(__name__)
 
 
-@csrf_exempt  # This is crucial for Paystack's webhook to work
-# Add POST to allow Paystack's webhook, and GET for the browser redirect
+
+def verify_paystack_signature(payload, expected_signature):
+    """
+    Verify that the webhook request is actually from Paystack
+    """
+    secret = settings.PAYSTACK_SECRET_KEY.encode('utf-8')
+    computed_signature = hmac.new(secret, payload, digestmod=hashlib.sha512).hexdigest()
+    return hmac.compare_digest(computed_signature, expected_signature or '')
+
+
+@csrf_exempt
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
 def payment_callback(request):
@@ -356,19 +366,50 @@ def payment_callback(request):
         # Handle the webhook from Paystack
         try:
             payload = request.data
-            # You might need to verify the signature of the webhook
-            # This is an optional but highly recommended security step
+            
+            # 🔽 ADDED: Verify Paystack signature for security
+            expected_signature = request.headers.get('x-paystack-signature')
+            if not verify_paystack_signature(request.body, expected_signature):
+                logger.warning("Invalid Paystack signature received")
+                return JsonResponse({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+            
             event = payload.get("event")
             if event != "charge.success":
                 # We only care about successful charges
+                logger.info("Ignoring non-success event: %s", event)
                 return JsonResponse({"status": "ignored"}, status=status.HTTP_200_OK)
 
             reference = payload.get("data", {}).get("reference")
-            # For the webhook, we don't have the slots. This webhook is
-            # primarily for server-to-server verification.
-            # Your app's deep link method is more reliable for passing slots.
+            
+            if not reference:
+                logger.error("No reference found in Paystack webhook payload")
+                return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 🔽 ADDED: Verify payment with Paystack for webhook too
+            headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+            url = f"https://api.paystack.co/transaction/verify/{reference}"
+
+            try:
+                res = requests.get(url, headers=headers)
+                res.raise_for_status()
+                data = res.json()
+                logger.info("Paystack verification response: %s", data)
+            except requests.exceptions.RequestException as e:
+                logger.error("Paystack verification request failed: %s", e)
+                return JsonResponse({"error": "Failed to communicate with Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
+
+            # Check if the payment was a success
+            if data.get("status") and data["data"].get("status") == "success":
+                # 🔽 ADDED: For webhook, just log success and return 200
+                # The actual account creation will happen when frontend calls verify-and-register
+                logger.info(f"Webhook: Payment {reference} verified successfully")
+                return JsonResponse({"status": "success"}, status=status.HTTP_200_OK)
+            else:
+                logger.error(f"Webhook: Payment {reference} failed verification")
+                return JsonResponse({"status": "failed"}, status=status.HTTP_200_OK)
 
         except json.JSONDecodeError:
+            logger.error("Invalid JSON in webhook payload")
             return JsonResponse({"error": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'GET':
@@ -386,11 +427,6 @@ def payment_callback(request):
         if not reference:
             logger.error("No transaction reference found in GET request.")
             return JsonResponse({"error": "No transaction reference found."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # The rest of the logic should apply to both GET and POST for simplicity
-        # of redirecting, but the `reference` is coming from different places.
-        # For simplicity, let's keep the verification logic tied to the GET method,
-        # as it's the one that triggers the final app-side registration.
 
         # Verify payment with Paystack
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
