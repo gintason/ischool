@@ -248,4 +248,4 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/callback/"
+PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/payment-callback/"

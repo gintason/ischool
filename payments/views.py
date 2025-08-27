@@ -357,7 +357,6 @@ def verify_paystack_signature(payload, expected_signature):
 @permission_classes([permissions.AllowAny])
 def payment_callback(request):
     logger.info("Incoming payment callback request: %s", request.method)
-    logger.info("Request data: %s", request.data)
     logger.info("Request query parameters: %s", request.GET)
 
     # Paystack's webhook sends a POST request with the reference in the body
@@ -365,11 +364,16 @@ def payment_callback(request):
     if request.method == 'POST':
         # Handle the webhook from Paystack
         try:
-            payload = request.data
+            # 🔽 CRITICAL FIX: Read the raw body FIRST before accessing request.data
+            raw_body = request.body
             
-            # 🔽 ADDED: Verify Paystack signature for security
+            # 🔽 Now parse the JSON data
+            payload = json.loads(raw_body.decode('utf-8'))
+            logger.info("Request data: %s", payload)
+            
+            # Verify Paystack signature for security
             expected_signature = request.headers.get('x-paystack-signature')
-            if not verify_paystack_signature(request.body, expected_signature):
+            if not verify_paystack_signature(raw_body, expected_signature):
                 logger.warning("Invalid Paystack signature received")
                 return JsonResponse({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
             
@@ -385,7 +389,7 @@ def payment_callback(request):
                 logger.error("No reference found in Paystack webhook payload")
                 return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # 🔽 ADDED: Verify payment with Paystack for webhook too
+            # Verify payment with Paystack for webhook too
             headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
             url = f"https://api.paystack.co/transaction/verify/{reference}"
 
@@ -400,7 +404,7 @@ def payment_callback(request):
 
             # Check if the payment was a success
             if data.get("status") and data["data"].get("status") == "success":
-                # 🔽 ADDED: For webhook, just log success and return 200
+                # For webhook, just log success and return 200
                 # The actual account creation will happen when frontend calls verify-and-register
                 logger.info(f"Webhook: Payment {reference} verified successfully")
                 return JsonResponse({"status": "success"}, status=status.HTTP_200_OK)
@@ -411,9 +415,14 @@ def payment_callback(request):
         except json.JSONDecodeError:
             logger.error("Invalid JSON in webhook payload")
             return JsonResponse({"error": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
+        except UnicodeDecodeError:
+            logger.error("Invalid encoding in request body")
+            return JsonResponse({"error": "Invalid encoding"}, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'GET':
         # Handle the browser redirect from Paystack
+        logger.info("Request data: %s", request.GET)  # For GET, data is in query params
+        
         reference = request.GET.get('reference')
         slots = request.GET.get('slots')
 
