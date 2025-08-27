@@ -338,13 +338,13 @@ iSchool Ola Team
     }, status=status.HTTP_201_CREATED)
 
 
-
 logger = logging.getLogger(__name__)
 
+
+@csrf_exempt  # This is crucial for Paystack's webhook to work
 # Add POST to allow Paystack's webhook, and GET for the browser redirect
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.AllowAny])
-@csrf_exempt  # This is crucial for Paystack's webhook to work
 def payment_callback(request):
     logger.info("Incoming payment callback request: %s", request.method)
     logger.info("Request data: %s", request.data)
