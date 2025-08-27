@@ -247,3 +247,5 @@ SLOT_PRICE_YEARLY = 30
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
+
+PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/callback/"

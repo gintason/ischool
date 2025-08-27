@@ -110,15 +110,13 @@ def initiate_payment(request):
     amount = num_slots * slot_price
     amount_in_kobo = int(amount * 100)
 
-    # ✅ CRITICAL FIX: Use the SAME callback URL format that your frontend expects
-    # The callback_url from frontend should be: "https://api.ischool.ng/api/payments/callback/"
-    base_callback_url = data['callback_url']
+    base_callback_url = settings.PAYMENT_CALLBACK_URL
      # Ensure the base URL has a trailing slash for consistency
     if not base_callback_url.endswith('/'):
         base_callback_url += '/'
         
     callback_url_with_params = f"{base_callback_url}?reference={tx_ref}&slots={num_slots}"
-    
+
     payload = {
         "reference": tx_ref,
         "amount": amount_in_kobo,
