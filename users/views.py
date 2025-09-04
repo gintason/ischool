@@ -269,6 +269,13 @@ class OleStudentRegistrationView(APIView):
         if not plan_id or not amount:
             return Response({"error": "Invalid plan type selected."}, status=400)
 
+        # ✅ Decide callback URL
+        is_mobile = request.data.get("is_mobile", False)
+        if is_mobile:
+            callback_url = "ischoolmobile://payment-callback?ole=true"  # 👈 deep link back to mobile app
+        else:
+            callback_url = settings.OLE_PAYMENT_CALLBACK_URL  # 👈 default (web)
+
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
             "Content-Type": "application/json",
@@ -278,7 +285,7 @@ class OleStudentRegistrationView(APIView):
             "email": email,
             "amount": amount,
             "plan": plan_id,
-            "callback_url": settings.OLE_PAYMENT_CALLBACK_URL,
+            "callback_url": callback_url,
             "metadata": {
                 "full_name": full_name,
                 "email": email,
@@ -286,6 +293,7 @@ class OleStudentRegistrationView(APIView):
                 "is_ole_student": True,
                 "class_level_id": class_level_id,
                 "subject_ids": subject_ids,
+                "is_mobile": is_mobile,  # 👈 tracked for debugging
             },
         }
 
@@ -320,6 +328,7 @@ class OleStudentRegistrationView(APIView):
             details=f"Paystack init failed: {result.get('message', 'Unknown error')}"
         )
         return Response({"error": result.get("message", "Payment initialization failed.")}, status=400)
+
 
 
 
