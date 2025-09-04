@@ -373,37 +373,28 @@ def payment_callback(request):
     logger.info("Incoming payment callback request: %s", request.method)
     logger.info("Request query parameters: %s", request.GET)
 
-    # Paystack's webhook sends a POST request with the reference in the body
-    # The user's browser redirect sends a GET request with the reference in the URL
     if request.method == 'POST':
-        # Handle the webhook from Paystack
+        # Handle Paystack webhook
         try:
-            # 🔽 CRITICAL FIX: Read the raw body FIRST before accessing request.data
             raw_body = request.body
-            
-            # 🔽 Now parse the JSON data
             payload = json.loads(raw_body.decode('utf-8'))
             logger.info("Request data: %s", payload)
-            
-            # Verify Paystack signature for security
+
             expected_signature = request.headers.get('x-paystack-signature')
             if not verify_paystack_signature(raw_body, expected_signature):
                 logger.warning("Invalid Paystack signature received")
                 return JsonResponse({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
-            
+
             event = payload.get("event")
             if event != "charge.success":
-                # We only care about successful charges
                 logger.info("Ignoring non-success event: %s", event)
                 return JsonResponse({"status": "ignored"}, status=status.HTTP_200_OK)
 
             reference = payload.get("data", {}).get("reference")
-            
             if not reference:
                 logger.error("No reference found in Paystack webhook payload")
                 return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Verify payment with Paystack for webhook too
+
             headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
             url = f"https://api.paystack.co/transaction/verify/{reference}"
 
@@ -416,10 +407,7 @@ def payment_callback(request):
                 logger.error("Paystack verification request failed: %s", e)
                 return JsonResponse({"error": "Failed to communicate with Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
 
-            # Check if the payment was a success
             if data.get("status") and data["data"].get("status") == "success":
-                # For webhook, just log success and return 200
-                # The actual account creation will happen when frontend calls verify-and-register
                 logger.info(f"Webhook: Payment {reference} verified successfully")
                 return JsonResponse({"status": "success"}, status=status.HTTP_200_OK)
             else:
@@ -434,15 +422,16 @@ def payment_callback(request):
             return JsonResponse({"error": "Invalid encoding"}, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'GET':
-        # Handle the browser redirect from Paystack
-        logger.info("Request data: %s", request.GET)  # For GET, data is in query params
-        
+        # Handle browser redirect from Paystack
+        logger.info("Request data: %s", request.GET)
+
         reference = request.GET.get('reference')
         slots = request.GET.get('slots')
+        ole = request.GET.get('ole')  # 👈 NEW: detect Ole flow flag
 
-        # The slots parameter is crucial, so we should handle its absence gracefully
-        if not slots:
-            slots_to_pass = "1"  # Default to 1 slot if not provided, or handle as an error
+        if not slots and not ole:
+            # only warn if neither slots nor ole are passed
+            slots_to_pass = "1"
             logger.warning("Slots parameter missing from GET request. Defaulting to 1.")
         else:
             slots_to_pass = slots
@@ -451,13 +440,12 @@ def payment_callback(request):
             logger.error("No transaction reference found in GET request.")
             return JsonResponse({"error": "No transaction reference found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify payment with Paystack
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
         url = f"https://api.paystack.co/transaction/verify/{reference}"
 
         try:
             res = requests.get(url, headers=headers)
-            res.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+            res.raise_for_status()
             data = res.json()
             logger.info("Paystack verification response: %s", data)
         except requests.exceptions.RequestException as e:
@@ -466,10 +454,13 @@ def payment_callback(request):
         except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid response from Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # Check if the payment was a success
         if data.get("status") and data["data"].get("status") == "success":
-            # Use HTML meta refresh to redirect to the app
-            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
+            # ✅ If ole param exists, append it to deep link
+            if ole == "true":
+                redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=success&ole=true"
+            else:
+                redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
+
             html_content = f"""
             <!DOCTYPE html>
             <html>
@@ -488,7 +479,6 @@ def payment_callback(request):
             """
             return HttpResponse(html_content, content_type="text/html")
         else:
-            # Payment failed or was not successful
             logger.error("Paystack transaction was not successful. Status: %s", data.get("data", {}).get("status"))
             redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=failed"
             html_content = f"""
@@ -508,6 +498,5 @@ def payment_callback(request):
             </html>
             """
             return HttpResponse(html_content, content_type="text/html")
-    
-    # Return a 405 for any other method
+
     return JsonResponse({"detail": "Method not allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
