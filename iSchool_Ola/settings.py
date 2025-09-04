@@ -215,7 +215,7 @@ PAYSTACK_PLAN_IDS = {
 
 PAYSTACK_PLAN_AMOUNTS = {
     #Ole plan amounts
-    "monthly": 610000,
+    "monthly": 2000,
 
     #Ola plans amounts
     "ola_monthly": 610000,
