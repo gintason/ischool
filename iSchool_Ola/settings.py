@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "elibrary",
     'django_celery_beat',
+    
 ]
 
 MIDDLEWARE = [

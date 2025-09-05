@@ -31,6 +31,7 @@ import hashlib
 
 from django.http import HttpResponseRedirect  # <-- Add this import
 from django.views.decorators.csrf import csrf_exempt
+PROCESSED_REFERENCES = set()
 
 
 pwo = PasswordGenerator()
@@ -395,6 +396,13 @@ def payment_callback(request):
                 logger.error("No reference in webhook payload")
                 return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # ✅ Idempotency check
+            if reference in PROCESSED_REFERENCES:
+                logger.info("Duplicate webhook for reference %s ignored", reference)
+                return JsonResponse({"status": "ignored", "message": "Payment already processed"}, status=status.HTTP_200_OK)
+
+            PROCESSED_REFERENCES.add(reference)
+
             headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
             url = f"https://api.paystack.co/transaction/verify/{reference}"
 
@@ -472,6 +480,28 @@ def payment_callback(request):
         if not reference:
             return JsonResponse({"error": "No reference found"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ✅ Idempotency check for GET redirect
+        if reference in PROCESSED_REFERENCES:
+            logger.info("Duplicate GET callback for reference %s ignored", reference)
+            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=duplicate"
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Redirecting to App</title>
+                    <meta http-equiv="refresh" content="0; url={redirect_url}">
+                </head>
+                <body>
+                    <p>Redirecting... <a href="{redirect_url}">Click here</a> if not redirected.</p>
+                    <script>window.location.href = "{redirect_url}";</script>
+                </body>
+            </html>
+            """
+            return HttpResponse(html_content, content_type="text/html")
+
+        PROCESSED_REFERENCES.add(reference)
+
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
         url = f"https://api.paystack.co/transaction/verify/{reference}"
 
@@ -506,4 +536,3 @@ def payment_callback(request):
         return HttpResponse(html_content, content_type="text/html")
 
     return JsonResponse({"detail": "Method not allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
-

@@ -305,3 +305,5 @@ class AdminActionLog(models.Model):
 
     def __str__(self):
         return f"{self.action_type} by {self.email} at {self.timestamp}"
+
+

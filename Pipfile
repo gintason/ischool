@@ -15,7 +15,6 @@ random-password-generator = "*"
 sendgrid = "*"
 python-decouple = "*"
 openai = "*"
-django-filter = "*"
 python-dotenv = "*"
 django-q = "*"
 celery = "*"
@@ -23,6 +22,7 @@ django-celery-beat = "*"
 redis = "*"
 reportlab = "*"
 gunicorn = "*"
+django-filter = "*"
 
 [dev-packages]
 
