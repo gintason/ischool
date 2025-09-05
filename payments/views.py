@@ -427,10 +427,41 @@ def payment_callback(request):
 
         reference = request.GET.get('reference')
         slots = request.GET.get('slots')
-        ole = request.GET.get('ole')  # 👈 NEW: detect Ole flow flag
+        ole = request.GET.get('ole')  # Detect Ole flow flag
 
-        if not slots and not ole:
-            # only warn if neither slots nor ole are passed
+        # 🔥 CRITICAL FIX: Handle OLE flow first
+        if ole == "true":
+            logger.info("🔥 OLE student payment flow detected")
+            
+            if not reference:
+                logger.error("No transaction reference found in OLE GET request.")
+                return JsonResponse({"error": "No transaction reference found."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # For OLE flow, we don't need to verify with Paystack again - just redirect
+            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=success&ole=true"
+            
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Redirecting to App</title>
+                    <meta http-equiv="refresh" content="0; url={redirect_url}">
+                </head>
+                <body>
+                    <p>Payment successful! <a href="{redirect_url}">Click here</a> to return to the app.</p>
+                    <script>
+                        window.location.href = "{redirect_url}";
+                    </script>
+                </body>
+            </html>
+            """
+            return HttpResponse(html_content, content_type="text/html")
+
+        # 🔥 Handle regular (non-OLE) flow
+        logger.info("Regular (non-OLE) payment flow detected")
+        
+        if not slots:
             slots_to_pass = "1"
             logger.warning("Slots parameter missing from GET request. Defaulting to 1.")
         else:
@@ -455,12 +486,8 @@ def payment_callback(request):
             return JsonResponse({"error": "Invalid response from Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
 
         if data.get("status") and data["data"].get("status") == "success":
-            # ✅ If ole param exists, append it to deep link
-            if ole == "true":
-                redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=success&ole=true"
-            else:
-                redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
-
+            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
+            
             html_content = f"""
             <!DOCTYPE html>
             <html>
