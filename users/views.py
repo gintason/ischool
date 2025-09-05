@@ -272,7 +272,7 @@ class OleStudentRegistrationView(APIView):
         # ✅ Decide callback URL
         is_mobile = request.data.get("is_mobile", False)
         if is_mobile:
-            callback_url = "ischoolmobile://payment-callback?ole=true"  # 👈 deep link back to mobile app
+            callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"  # 👈 deep link back to mobile app
         else:
             callback_url = settings.OLE_PAYMENT_CALLBACK_URL  # 👈 default (web)
 
