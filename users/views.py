@@ -331,7 +331,6 @@ class OleStudentRegistrationView(APIView):
 
 
 
-
 class VerifyOleStudentPaymentView(APIView):
     permission_classes = [AllowAny]
 

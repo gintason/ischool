@@ -429,7 +429,7 @@ def payment_callback(request):
     elif request.method == 'GET':
         # ✅ Handle browser redirect from Paystack
         logger.info("Handling GET callback")
-        reference = request.GET.get('reference')
+        reference = request.GET.get('reference') or request.GET.get('tx_ref')
         slots = request.GET.get('slots')
         ole = request.GET.get('ole')
 
