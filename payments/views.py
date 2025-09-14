@@ -28,6 +28,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 import hmac
 import hashlib
+import threading
 
 from django.http import HttpResponseRedirect  # <-- Add this import
 from django.views.decorators.csrf import csrf_exempt
@@ -324,28 +325,41 @@ def verify_and_register(request):
         f"{u['full_name']} ({u['email']})\nUsername: {u['username']}\nPassword: {u['password']}"
         for u in created_users
     )
+    
+    def send_async_email(subject, message, recipient):
+        def _send():
+            try:
+                send_mail(
+                    subject,
+                    message,
+                    "noreply@ischool.ng",
+                    [recipient],
+                    fail_silently=False
+                )
+            except Exception as e:
+                logger.error("❌ Async email send failed for %s: %s", recipient, e, exc_info=True)
+        threading.Thread(target=_send, daemon=True).start()
 
+    # Inside your registration logic
     try:
-        send_mail(
-            subject='Your iSchool Ola Login Details',
-            message=f"""Dear User,
+        email_subject = "Your iSchool Ola Login Details"
+        email_message = f"""Dear User,
 
-Welcome to iSchool Ola! Your registration was successful. Below are the login details for your registered slot(s):
+    Welcome to iSchool Ola! Your registration was successful. Below are the login details for your registered slot(s):
 
-{login_details}
+    {login_details}
 
-Login here: https://www.ischool.ng/student/login
+    Login here: https://www.ischool.ng/student/login
 
-Best regards,  
-iSchool Ola Team
-""",
-            from_email="noreply@ischool.ng",
-            recipient_list=[email],
-            fail_silently=False,
-        )
+    Best regards,  
+    iSchool Ola Team
+    """
+        send_async_email(email_subject, email_message, email)
+        logger.info(f"📨 Registration email queued for: {email}")
     except Exception as e:
-        logger.error("Error sending email to %s: %s", email, e)
+        logger.error("❌ Failed to queue registration email for %s: %s", email, e, exc_info=True)
 
+    # ✅ Return success response immediately
     return Response({
         "detail": "Registration successful.",
         "users": created_users,
