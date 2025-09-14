@@ -53,6 +53,7 @@ from django.contrib import messages
 import uuid
 import logging
 from django.contrib.auth import authenticate
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -87,27 +88,38 @@ class TeacherApplicationView(APIView):
                 f"Best regards,\n"
                 f"iSchool Ole Team"
             )
+            # Utility function for threaded email
+        def send_async_email(subject, message, recipient):
+            def _send():
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        "noreply@ischool.ng",
+                        [recipient],
+                        fail_silently=False
+                    )
+                except Exception as e:
+                    logger.error("❌ Async email send failed for %s: %s", recipient, e, exc_info=True)
+            threading.Thread(target=_send, daemon=True).start()
 
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    "noreply@ischool.ng",
-                    [email],
-                    fail_silently=False
-                )
-            except Exception as e:
-                logger.error("❌ Email sending failed", exc_info=True)
-                return Response(
-                    {"error": f"Application saved, but email failed: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-
-            # ✅ Return success response
+        # Inside your view
+        try:
+            send_async_email(subject, message, email)
+            logger.info(f"📨 Application email queued for: {email}")
+        except Exception as e:
+            logger.error("❌ Failed to queue application email for %s: %s", email, e, exc_info=True)
             return Response(
-                {"message": "Application received successfully."},
-                status=status.HTTP_201_CREATED
+                {"error": f"Application saved, but email failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+        # ✅ Return success response immediately
+        return Response(
+            {"message": "Application received successfully."},
+            status=status.HTTP_201_CREATED
+        )
+
 
         # ❌ Validation failed
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

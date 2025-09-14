@@ -52,6 +52,8 @@ from django.contrib import messages
 
 import logging
 import threading
+from django.core.cache import cache
+PROCESSED_REFERENCES = set()
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +349,19 @@ class VerifyOleStudentPaymentView(APIView):
         if not reference:
             logger.info("❌ Missing reference in request.")
             return Response({"error": "Missing reference."}, status=400)
+        
+        # ✅ Idempotency check (using cache or fallback set)
+        cache_key = f"processed_ref_{reference}"
+        if cache.get(cache_key) or reference in PROCESSED_REFERENCES:
+            logger.warning(f"⚠️ Duplicate verification attempt for {reference}")
+            return Response(
+                {"status": "duplicate", "message": "Payment already processed."},
+                status=200
+            )
+
+        # Mark reference as processed (5 mins expiry in cache)
+        cache.set(cache_key, True, timeout=300)
+        PROCESSED_REFERENCES.add(reference)
 
         logger.info(f"🔍 Verifying payment with reference: {reference}")
         verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
