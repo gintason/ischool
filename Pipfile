@@ -23,6 +23,7 @@ redis = "*"
 reportlab = "*"
 gunicorn = "*"
 django-filter = "*"
+psycopg = {extras = ["binary"], version = "*"}
 
 [dev-packages]
 

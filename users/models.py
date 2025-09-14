@@ -305,4 +305,15 @@ class AdminActionLog(models.Model):
 
     def __str__(self):
         return f"{self.action_type} by {self.email} at {self.timestamp}"
+    
 
+class OlePaymentVerification(models.Model):
+    reference = models.CharField(max_length=100, unique=True, db_index=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.reference
+
+    class Meta:
+        verbose_name = "Payment Verification"
+        verbose_name_plural = "Payment Verifications"
