@@ -51,6 +51,7 @@ from django.core.mail import send_mail
 from django.contrib import messages
 
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -447,37 +448,51 @@ class VerifyOleStudentPaymentView(APIView):
             return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
 
         # Step: Send welcome email
-        try:
-            send_mail(
-                "Welcome to iSchool Ole!",
-                f"""
-Hello {full_name},
+        # Utility function for threaded email
+        def send_async_email(subject, message, recipient):
+            def _send():
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        "noreply@ischool.ng",
+                        [recipient],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Async email send failed: {e}")
+            threading.Thread(target=_send, daemon=True).start()
 
-Your iSchool Ole account has been successfully created.
+        # Step: Send welcome email (non-blocking)
+        welcome_subject = "Welcome to iSchool Ole!"
+        welcome_message = f"""
+        Hello {full_name},
 
-Login Details:
-Email: {email}
-Password: {password or '[already set]'}
+        Your iSchool Ole account has been successfully created.
 
-Visit: https://www.ischool.ng/ole-student/login
+        Login Details:
+        Email: {email}
+        Password: {password or '[already set]'}
 
-Best regards,  
-iSchool Ole Team
-                """,
-                "noreply@ischool.ng",
-                [email],
-            )
-            logger.info(f"✅ Welcome email sent to: {email}")
-        except Exception as e:
-            logger.info(f"❌ Failed to send welcome email: {e}")
+        Visit: https://www.ischool.ng/ole-student/login
+
+        Best regards,  
+        iSchool Ole Team
+        """
+
+        send_async_email(welcome_subject, welcome_message, email)
+        logger.info(f"📨 Welcome email queued for: {email}")
 
         return Response({
-            "message": "Payment verified and account created." if new_user_created else "Account completed successfully. Please copy your email and Password to login",
+            "message": (
+                "Payment verified and account created."
+                if new_user_created
+                else "Account completed successfully. Please copy your email and Password to login"
+            ),
             "email": email,
             "temporary_password": password if new_user_created else None,
-            "role": "ole_student"
+            "role": "ole_student",
         }, status=201 if new_user_created else 200)
-    
 
 
 class OleStudentLoginView(LoginView):
