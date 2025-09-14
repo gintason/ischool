@@ -7,7 +7,7 @@ from .serializers import (UserRegistrationSerializer,
                           CustomTokenObtainPairSerializer, OleStudentRegistrationSerializer, 
                           OleStudentDashboardSerializer)
 
-from .models import RegistrationGroup
+from .models import RegistrationGroup, OlePaymentVerification
 from .permissions import  IsTeacherUser, IsStudentUser, IsParentUser, IsAdminUser, IsOleStudentUser
 from rest_framework import status, permissions
 from .serializers import CustomUserSerializer
@@ -49,6 +49,7 @@ from django.conf import settings
 from django.db import IntegrityError  # Make sure this is imported at the top
 from django.core.mail import send_mail
 from django.contrib import messages
+from django.db import IntegrityError, transaction
 
 import logging
 import threading
@@ -337,31 +338,28 @@ class OleStudentRegistrationView(APIView):
 class VerifyOleStudentPaymentView(APIView):
     permission_classes = [AllowAny]
 
+    @transaction.atomic
     def post(self, request):
         logger.info("=== VERIFY OLE STUDENT PAYMENT CALLED ===")
-        logger.info(f"Request data: {request.data}")
-
-        if not request.data:
-            logger.info("❌ No data in request.")
-            return Response({"error": "No data provided."}, status=400)
 
         reference = request.data.get("reference")
         if not reference:
             logger.info("❌ Missing reference in request.")
             return Response({"error": "Missing reference."}, status=400)
         
-        # ✅ Idempotency check (using cache or fallback set)
-        cache_key = f"processed_ref_{reference}"
-        if cache.get(cache_key) or reference in PROCESSED_REFERENCES:
-            logger.warning(f"⚠️ Duplicate verification attempt for {reference}")
+        # ✅ FINAL FIX: Use a database transaction for an atomic and persistent idempotency check.
+        try:
+            # Attempt to create a new record. This will fail if the reference already exists
+            # due to the 'unique=True' constraint on the PaymentVerification model.
+            OlePaymentVerification.objects.create(reference=reference)
+            logger.info(f"✅ Created new verification record for: {reference}")
+        except IntegrityError:
+            # If the record already exists, catch the error and immediately return a success response.
+            logger.warning(f"⚠️ Duplicate verification attempt for {reference} (DB check).")
             return Response(
                 {"status": "duplicate", "message": "Payment already processed."},
                 status=200
             )
-
-        # Mark reference as processed (5 mins expiry in cache)
-        cache.set(cache_key, True, timeout=300)
-        PROCESSED_REFERENCES.add(reference)
 
         logger.info(f"🔍 Verifying payment with reference: {reference}")
         verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
@@ -375,6 +373,8 @@ class VerifyOleStudentPaymentView(APIView):
             logger.info(f"✅ PAYSTACK VERIFY RESULT: {json.dumps(result, indent=2)}")
         except Exception as e:
             logger.info(f"❌ Error contacting Paystack: {str(e)}")
+            # Consider rolling back the PaymentVerification creation if Paystack is unavailable
+            # to allow for a future retry, though this adds complexity.
             return Response({"error": "Verification service unavailable."}, status=502)
 
         if not (result.get("status") and result["data"].get("status") == "success"):
@@ -404,6 +404,7 @@ class VerifyOleStudentPaymentView(APIView):
             logger.info(f"🔍 Found existing user: {email}")
             if user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists():
                 logger.info("✅ Existing user is fully registered.")
+                # The frontend will receive the same 200 OK response with the same message and data.
                 return Response({
                     "message": "Payment verified. Your account is already active.",
                     "email": user.email,
@@ -462,8 +463,7 @@ class VerifyOleStudentPaymentView(APIView):
             logger.info(f"❌ Subscription creation failed: {e}")
             return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
 
-        # Step: Send welcome email
-        # Utility function for threaded email
+        # Step: Send welcome email (non-blocking)
         def send_async_email(subject, message, recipient):
             def _send():
                 try:
@@ -478,7 +478,6 @@ class VerifyOleStudentPaymentView(APIView):
                     logger.error(f"❌ Async email send failed: {e}")
             threading.Thread(target=_send, daemon=True).start()
 
-        # Step: Send welcome email (non-blocking)
         welcome_subject = "Welcome to iSchool Ole!"
         welcome_message = f"""
         Hello {full_name},
@@ -498,6 +497,7 @@ class VerifyOleStudentPaymentView(APIView):
         send_async_email(welcome_subject, welcome_message, email)
         logger.info(f"📨 Welcome email queued for: {email}")
 
+        # The frontend will receive the same response body and status codes.
         return Response({
             "message": (
                 "Payment verified and account created."
