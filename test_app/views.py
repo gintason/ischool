@@ -29,6 +29,7 @@ import json
 from django.core.mail import send_mail
 from django.contrib import messages
 from django.core.mail import EmailMessage
+import threading
 
 
 logo_relative_path = 'img/logo.png'  # Relative to 'static/'
@@ -252,20 +253,26 @@ class SubmitTestAPIView(APIView):
             # Determine recipients
             student_email = request.user.email
             parent_email = getattr(request.user.registration_group, 'email', None)
+            recipients = list(filter(None, [student_email, parent_email]))
 
-            # Send to student and parent (if available)
-            for recipient in filter(None, [student_email, parent_email]):
-                try:
-                    email = EmailMessage(
-                    subject=email_subject,
-                    body=email_body,
-                    from_email="noreply@ischool.ng",
-                    to=[recipient],
-                    )
-                    email.attach("Test_Result.pdf", pdf_content, "application/pdf")  # attach file
-                    email.send(fail_silently=False)
-                except Exception as e:
-                    logger.error(f"Exception while sending email to {recipient}: {str(e)}")
+
+           # ✅ Async email sending with threading (non-blocking)
+            def _send_results():
+                for recipient in recipients:
+                    try:
+                        email = EmailMessage(
+                            subject=email_subject,
+                            body=email_body,
+                            from_email="noreply@ischool.ng",
+                            to=[recipient],
+                        )
+                        email.attach("Test_Result.pdf", pdf_content, "application/pdf")
+                        email.send(fail_silently=False)
+                        logger.info(f"📨 Result email queued for {recipient}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to send result email to {recipient}: {e}")
+
+            threading.Thread(target=_send_results, daemon=True).start()
 
             return Response({
                 "message": "Test submitted. Result emailed.",
