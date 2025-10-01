@@ -17,6 +17,8 @@ import NewsDetailPage from './pages/NewsDetailPage';
 import TestListPage from './pages/TestListPage';
 import ErrorBoundary from './pages/ErrorBoundary';
 import RegistrationSuccess from './pages/RegistrationSuccess';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import OurTerms from './pages/OurTerms';
 
 import Apply from './pages/teacher/Apply';
 import Shortlisted from './pages/teacher/Shortlisted';
@@ -60,6 +62,8 @@ function App() {
           <Route path="/take_test" element={<ErrorBoundary><TestPage /></ErrorBoundary>} />
           <Route path="/tests" element={<TestListPage />} />
           <Route path="/registration_success" element={<RegistrationSuccess />} />
+          <Route path="/privacy_policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<OurTerms />} />
          
         </Route>
 

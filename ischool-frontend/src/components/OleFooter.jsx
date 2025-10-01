@@ -37,8 +37,8 @@ const OleFooter = () => {
             <ul style={{ listStyle: 'none', padding: 0 }}>
               <li><a href="/ole_home" style={{ color: 'white', textDecoration: 'none' }}>Home</a></li>
               <li><a href="/about_ole" style={{ color: 'white', textDecoration: 'none' }}>About</a></li>
-              <li><a href="/teacher/apply" style={{ color: 'white', textDecoration: 'none' }}>Teacher Application</a></li>
-              <li><a href="/contact_ole" style={{ color: 'white', textDecoration: 'none' }}>Contact</a></li>
+              <li><a href="/terms" style={{ color: 'white', textDecoration: 'none' }}>Terms & Conditions</a></li>
+              <li><a href="/privacy_policy" style={{ color: 'white', textDecoration: 'none' }}>Privacy Policy</a></li>
             </ul>
           </Col>
 
