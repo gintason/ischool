@@ -9,7 +9,7 @@ export default function PrivacyPolicy() {
           Privacy Policy
         </h1>
         <p className="text-center text-gray-600 mb-10">
-          Effective Date: <span className="font-semibold">[Insert Date]</span>
+          Effective Date: <span className="font-semibold">October, 2025</span>
         </p>
 
         {/* Sections */}
