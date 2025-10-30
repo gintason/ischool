@@ -216,7 +216,7 @@ PAYSTACK_PLAN_IDS = {
 
 PAYSTACK_PLAN_AMOUNTS = {
     #Ole plan amounts
-    "monthly": 2000,
+    "monthly": 620000,
 
     #Ola plans amounts
     "ola_monthly": 610000,
@@ -241,8 +241,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 #SLOT_PRICE_MONTHLY = 6100, SLOT_PRICE_YEARLY = 52000
 
 # Other constants
-SLOT_PRICE_MONTHLY = 20
-SLOT_PRICE_YEARLY = 30
+SLOT_PRICE_MONTHLY = 610000
+SLOT_PRICE_YEARLY = 5200000
 
 
 AUTHENTICATION_BACKENDS = [

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a940bba6-fa09-4347-8a78-57b72e9f6d3b"
+      }
+    },
+    "android": {
+      "package": "com.gintason.ischoolapp"
+    }
+  }
+}

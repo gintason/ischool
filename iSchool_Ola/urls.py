@@ -35,11 +35,13 @@ urlpatterns = [
     path("api/elibrary/", include("elibrary.urls")),  # ✅ Fixed
 ]
 
-# ✅ React fallback MUST be outside urlpatterns (and always last)
+# ✅ Only serve React index.html for frontend routes (not admin, not API)
 urlpatterns += [
-    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
+    re_path(r'^(?!admin/|api/|teacher/|parent/).*$', TemplateView.as_view(template_name='index.html')),
 ]
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

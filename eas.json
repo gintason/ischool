@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 16.19.3",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "ndkVersion": "26.3.11579264"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "ndkVersion": "26.3.11579264",
+        "buildType": "apk"   
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "ndkVersion": "26.3.11579264",
+        "buildType": "app-bundle"   
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
