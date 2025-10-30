@@ -19,6 +19,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
+from django.http import HttpResponseNotFound
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -40,6 +41,12 @@ urlpatterns += [
     re_path(r'^(?!admin/|api/|teacher/|parent/).*$', TemplateView.as_view(template_name='index.html')),
 ]
 
+
+# ✅ Safety: custom 404 fallback for anything unexpected
+def not_found_view(request, exception=None):
+    return HttpResponseNotFound("404 - Page not found")
+
+handler404 = not_found_view
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
