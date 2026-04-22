@@ -82,10 +82,20 @@ class QuestionAdmin(admin.ModelAdmin):
         return custom_urls + urls
     
     def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        # Add the upload URL to the context
-        extra_context['upload_url'] = 'upload-questions/'
+        from django.contrib import messages
+        from django.utils.safestring import mark_safe
+        
+        # Add a clickable button message
+        messages.success(request, mark_safe(
+            '<div style="background-color: #28a745; color: white; padding: 10px; border-radius: 5px; text-align: center;">'
+            '📤 <strong>Quick Action:</strong> '
+            '<a href="upload-questions/" style="color: white; font-weight: bold; text-decoration: underline;">'
+            'Click here to upload questions from Excel</a>'
+            '</div>'
+        ))
+        
         return super().changelist_view(request, extra_context=extra_context)
+    
     
     def upload_questions(self, request):
         if request.method == 'POST':
