@@ -86,6 +86,7 @@ class QuestionAdmin(admin.ModelAdmin):
         extra_context['upload_button'] = True
         return super().changelist_view(request, extra_context=extra_context)
     
+    
     def upload_questions(self, request):
         if request.method == 'POST':
             excel_file = request.FILES.get('excel_file')
@@ -102,7 +103,7 @@ class QuestionAdmin(admin.ModelAdmin):
                 df = pd.read_excel(excel_file)
                 
                 required_columns = ['subject_name', 'topic_name', 'class_level', 'question_text', 'question_type', 
-                                  'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
+                                'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
                 
                 missing_columns = [col for col in required_columns if col not in df.columns]
                 if missing_columns:
@@ -127,31 +128,28 @@ class QuestionAdmin(admin.ModelAdmin):
                             subject=subject
                         )
                         
-                        # Get or create Test
-                        test, _ = Test.objects.get_or_create(
+                        # Get or create Test - FIXED: use created_by (not created_by_id)
+                        test, created = Test.objects.get_or_create(
                             class_level=row['class_level'],
-                            subject=subject,
-                            topic=topic,
-                            created_by=request.user
+                            subject_fk=subject,
+                            topic_fk=topic,
+                            defaults={'created_by': request.user}
                         )
                         
-                        # Prepare options
-                        options = {
-                            'A': str(row['option_a']) if pd.notna(row['option_a']) else '',
-                            'B': str(row['option_b']) if pd.notna(row['option_b']) else '',
-                            'C': str(row['option_c']) if pd.notna(row['option_c']) else '',
-                            'D': str(row['option_d']) if pd.notna(row['option_d']) else '',
-                        }
+                        # If test already exists but has no created_by, update it
+                        if not created and not test.created_by:
+                            test.created_by = request.user
+                            test.save()
                         
                         # Create question
                         question = Question.objects.create(
                             test=test,
                             text=row['question_text'],
                             question_type=row['question_type'] if pd.notna(row['question_type']) else 'mcq',
-                            option_a=options['A'],
-                            option_b=options['B'],
-                            option_c=options['C'],
-                            option_d=options['D'],
+                            option_a=str(row['option_a']) if pd.notna(row['option_a']) else '',
+                            option_b=str(row['option_b']) if pd.notna(row['option_b']) else '',
+                            option_c=str(row['option_c']) if pd.notna(row['option_c']) else '',
+                            option_d=str(row['option_d']) if pd.notna(row['option_d']) else '',
                             correct_answer=str(row['correct_answer']) if pd.notna(row['correct_answer']) else '',
                         )
                         
@@ -176,8 +174,8 @@ class QuestionAdmin(admin.ModelAdmin):
             'title': 'Upload Questions from Excel',
             'opts': self.model._meta,
         })
+    
 
-# In TestAdmin
 @admin.register(Test)
 class TestAdmin(admin.ModelAdmin):
     list_display = ['get_subject_name', 'get_topic_name', 'class_level', 'created_by', 'date_created']
@@ -201,6 +199,19 @@ class TestAdmin(admin.ModelAdmin):
             'fields': ('class_level', 'subject_fk', 'topic_fk', 'subject', 'topic')
         }),
     )
+    
+    # Auto-set created_by to current user
+    def save_model(self, request, obj, form, change):
+        if not change:  # If creating new object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    # Filter form fields
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "topic_fk":
+            kwargs["queryset"] = Topic.objects.select_related('subject').all()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    
 
 # Keep existing admin registrations for other models
 @admin.register(TestSession)
