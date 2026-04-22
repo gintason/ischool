@@ -46,25 +46,27 @@ class Topic(models.Model):
     def __str__(self):
         return f"{self.name} ({self.subject.name})"
 
-# Updated Test model - KEEP old fields temporarily
+
+# test_app/models.py - Update the Test model
 class Test(models.Model):
     class_level = models.CharField(max_length=10, choices=CLASS_CHOICES, default="JSS1")
     
-    # Keep old fields for migration
-    subject_old = models.CharField(max_length=100, default="Mathematics", db_column='subject')
-    topic_old = models.CharField(max_length=100, default="Basic Science", db_column='topic')
+    # Keep old fields (these already exist in database)
+    subject = models.CharField(max_length=100, default="Mathematics")
+    topic = models.CharField(max_length=100, default="Basic Science")
     
-    # Add new foreign key fields
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True, related_name='tests')
-    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, null=True, blank=True, related_name='tests')
+    # New foreign key fields (nullable for migration)
+    subject_fk = models.ForeignKey(Subject, on_delete=models.CASCADE, null=True, blank=True, related_name='tests')
+    topic_fk = models.ForeignKey(Topic, on_delete=models.CASCADE, null=True, blank=True, related_name='tests')
     
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     date_created = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        if self.subject and self.topic:
-            return f"{self.subject.name} - {self.topic.name}"
-        return f"{self.subject_old} - {self.topic_old}"
+        if self.subject_fk and self.topic_fk:
+            return f"{self.subject_fk.name} - {self.topic_fk.name}"
+        return f"{self.subject} - {self.topic}"
+    
 
 # Keep Question model same but update test reference
 class Question(models.Model):
@@ -83,6 +85,18 @@ class Question(models.Model):
         if self.test and self.test.subject:
             return f"{self.text[:50]} - {self.test.subject.name}"
         return f"{self.text[:50]}"
+    
+    # In the Question model
+    def __str__(self):
+        try:
+            if self.test and self.test.subject_fk:
+                return f"{self.text[:50]} - {self.test.subject_fk.name}"
+            elif self.test and self.test.subject:
+                return f"{self.text[:50]} - {self.test.subject}"
+            else:
+                return f"{self.text[:50]}"
+        except:
+            return f"{self.text[:50]}"
 
 # Keep other models as they were
 class TestSession(models.Model):

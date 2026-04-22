@@ -54,18 +54,24 @@ class TopicAdmin(admin.ModelAdmin):
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ['text', 'question_type', 'get_subject', 'get_topic']
-    list_filter = ['question_type', 'test__subject__class_level', 'test__subject', 'test__topic']
+    list_filter = ['question_type']  # Remove the invalid filters for now
     search_fields = ['text']
     
     def get_subject(self, obj):
-        return obj.test.subject.name if obj.test else '-'
+        if obj.test and obj.test.subject_fk:
+            return obj.test.subject_fk.name
+        elif obj.test and obj.test.subject:
+            return obj.test.subject
+        return '-'
     get_subject.short_description = 'Subject'
-    get_subject.admin_order_field = 'test__subject__name'
     
     def get_topic(self, obj):
-        return obj.test.topic.name if obj.test else '-'
+        if obj.test and obj.test.topic_fk:
+            return obj.test.topic_fk.name
+        elif obj.test and obj.test.topic:
+            return obj.test.topic
+        return '-'
     get_topic.short_description = 'Topic'
-    get_topic.admin_order_field = 'test__topic__name'
     
     # Add custom URL for Excel upload
     def get_urls(self):
@@ -171,34 +177,30 @@ class QuestionAdmin(admin.ModelAdmin):
             'opts': self.model._meta,
         })
 
-# Updated Test Admin
+# In TestAdmin
 @admin.register(Test)
 class TestAdmin(admin.ModelAdmin):
     list_display = ['get_subject_name', 'get_topic_name', 'class_level', 'created_by', 'date_created']
-    search_fields = ['subject__name', 'topic__name']
-    list_filter = ['class_level', 'subject', 'topic', 'date_created']
+    search_fields = ['subject_fk__name', 'topic_fk__name', 'subject', 'topic']
+    list_filter = ['class_level', 'date_created']
     
     def get_subject_name(self, obj):
-        return obj.subject.name
+        if obj.subject_fk:
+            return obj.subject_fk.name
+        return obj.subject
     get_subject_name.short_description = 'Subject'
-    get_subject_name.admin_order_field = 'subject__name'
     
     def get_topic_name(self, obj):
-        return obj.topic.name
+        if obj.topic_fk:
+            return obj.topic_fk.name
+        return obj.topic
     get_topic_name.short_description = 'Topic'
-    get_topic_name.admin_order_field = 'topic__name'
     
     fieldsets = (
         ('Test Information', {
-            'fields': ('class_level', 'subject', 'topic')
+            'fields': ('class_level', 'subject_fk', 'topic_fk', 'subject', 'topic')
         }),
     )
-    
-    # Override form to filter topics based on subject
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "topic":
-            kwargs["queryset"] = Topic.objects.select_related('subject').all()
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 # Keep existing admin registrations for other models
 @admin.register(TestSession)
