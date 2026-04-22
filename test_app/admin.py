@@ -83,9 +83,9 @@ class QuestionAdmin(admin.ModelAdmin):
     
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['upload_button'] = True
+        # Add the upload URL to the context
+        extra_context['upload_url'] = 'upload-questions/'
         return super().changelist_view(request, extra_context=extra_context)
-    
     
     def upload_questions(self, request):
         if request.method == 'POST':
