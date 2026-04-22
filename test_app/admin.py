@@ -122,36 +122,46 @@ class QuestionAdmin(admin.ModelAdmin):
                 
                 created_count = 0
                 error_count = 0
+                tests_created = 0
                 errors = []
                 
                 for index, row in df.iterrows():
                     try:
-                        # Get or create Subject
-                        subject, _ = Subject.objects.get_or_create(
+                        # Step 1: Get or create Subject
+                        subject, subject_created = Subject.objects.get_or_create(
                             name=row['subject_name'],
                             class_level=row['class_level']
                         )
                         
-                        # Get or create Topic
-                        topic, _ = Topic.objects.get_or_create(
+                        # Step 2: Get or create Topic under this Subject
+                        topic, topic_created = Topic.objects.get_or_create(
                             name=row['topic_name'],
                             subject=subject
                         )
                         
-                        # Get or create Test - FIXED: use created_by (not created_by_id)
-                        test, created = Test.objects.get_or_create(
+                        # Step 3: Get or create Test (this links subject and topic)
+                        test, test_created = Test.objects.get_or_create(
                             class_level=row['class_level'],
                             subject_fk=subject,
                             topic_fk=topic,
-                            defaults={'created_by': request.user}
+                            defaults={
+                                'created_by': request.user,
+                                'subject': row['subject_name'],  # Keep old field for compatibility
+                                'topic': row['topic_name']       # Keep old field for compatibility
+                            }
                         )
                         
-                        # If test already exists but has no created_by, update it
-                        if not created and not test.created_by:
+                        if test_created:
+                            tests_created += 1
+                        
+                        # If test exists but no created_by, update it
+                        if not test_created and not test.created_by:
                             test.created_by = request.user
+                            test.subject = row['subject_name']
+                            test.topic = row['topic_name']
                             test.save()
                         
-                        # Create question
+                        # Step 4: Create Question linked to this Test
                         question = Question.objects.create(
                             test=test,
                             text=row['question_text'],
@@ -169,11 +179,17 @@ class QuestionAdmin(admin.ModelAdmin):
                         error_count += 1
                         errors.append(f"Row {index + 2}: {str(e)}")
                 
+                # Summary message
+                summary = f'Successfully uploaded {created_count} questions! '
+                if tests_created > 0:
+                    summary += f'Created {tests_created} new test(s). '
+                summary += f'Errors: {error_count}'
+                
                 if created_count > 0:
-                    messages.success(request, f'Successfully uploaded {created_count} questions!')
+                    messages.success(request, summary)
                 
                 if errors:
-                    messages.warning(request, f'Completed with {error_count} errors. Details: {"; ".join(errors[:5])}')
+                    messages.warning(request, f'Partial success. Errors: {"; ".join(errors[:5])}')
                 
             except Exception as e:
                 messages.error(request, f'Error reading Excel file: {str(e)}')
