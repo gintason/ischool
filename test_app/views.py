@@ -1,4 +1,3 @@
-# test_app/views.py - UPDATED VERSION
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -30,10 +29,14 @@ import json
 from django.core.mail import send_mail
 from django.contrib import messages
 import threading
+from .models import CLASS_CHOICES  
 
-logo_relative_path = 'img/logo.png'
+
+logo_relative_path = 'img/logo.png'  # Relative to 'static/'
 logo_path = os.path.join(settings.STATIC_ROOT, 'img', 'logo.png')
 logo_path = os.path.join(settings.BASE_DIR, 'static', logo_relative_path)
+
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -42,6 +45,7 @@ def list_tests(request):
     serializer = TestSerializer(tests, many=True)
     return Response(serializer.data)
 
+
 class StartTestAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -49,26 +53,35 @@ class StartTestAPIView(APIView):
         serializer = StartTestSerializer(data=request.data)
         if serializer.is_valid():
             class_level = serializer.validated_data['class_level']
-            subject_name = serializer.validated_data['subject']
-            topic_name = serializer.validated_data['topic']
+            subject = serializer.validated_data['subject']
+            topic = serializer.validated_data['topic']
 
-            # Fetch questions using the new structure
+            # Fetch questions - updated to work with both old and new structure
             questions = Question.objects.filter(
                 test__class_level=class_level,
-                test__subject__name=subject_name,  # Access through ForeignKey
-                test__topic__name=topic_name,      # Access through ForeignKey
+                test__subject__name=subject,  # Support new ForeignKey
+                test__topic__name=topic,      # Support new ForeignKey
             )
+            
+            # If no questions found with new structure, try old structure
+            if not questions.exists():
+                questions = Question.objects.filter(
+                    test__class_level=class_level,
+                    test__subject_old=subject,
+                    test__topic_old=topic,
+                )
 
-            selected_questions = random.sample(list(questions), min(10, len(questions)))
+            selected_questions = random.sample(list(questions), min(10, len(questions))) if questions.exists() else []
 
-            # Create test session (keep as strings for now)
+            # Create test session
             session = TestSession.objects.create(
                 student=request.user,
                 class_level=class_level,
-                subject=subject_name,  # Store as string
-                topic=topic_name       # Store as string
+                subject=subject,
+                topic=topic
             )
 
+            # Serialize questions using updated QuestionSerializer
             question_data = QuestionSerializer(selected_questions, many=True).data
 
             return Response({
@@ -77,6 +90,8 @@ class StartTestAPIView(APIView):
             }, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -86,16 +101,30 @@ def get_test_detail(request, id):
     except Test.DoesNotExist:
         return Response({'error': 'Test not found'}, status=404)
 
-    # Get subject and topic names from ForeignKey
-    subject_name = test.subject.name if test.subject else ''
-    topic_name = test.topic.name if test.topic else ''
+    # Get subject and topic names safely
+    if test.subject:
+        subject_name = test.subject.name
+        topic_name = test.topic.name if test.topic else ""
+    else:
+        subject_name = test.subject_old
+        topic_name = test.topic_old
 
     questions = Question.objects.filter(
         test__class_level=test.class_level,
-        test__subject=test.subject,
-        test__topic=test.topic,
         question_type='mcq'
     )
+    
+    # Further filter by subject and topic if they exist
+    if test.subject:
+        questions = questions.filter(
+            test__subject__name=subject_name,
+            test__topic__name=topic_name
+        )
+    else:
+        questions = questions.filter(
+            test__subject_old=subject_name,
+            test__topic_old=topic_name
+        )
 
     return Response({
         "id": test.id,
@@ -115,6 +144,7 @@ def get_test_detail(request, id):
         ]
     })
 
+
 class SubmitTestAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -129,10 +159,12 @@ class SubmitTestAPIView(APIView):
             except TestSession.DoesNotExist:
                 return Response({"detail": "Test session not found."}, status=status.HTTP_404_NOT_FOUND)
             
+            # ✅ Time check: ensure submission is within 10 minutes
             time_elapsed = timezone.now() - session.started_at
             if time_elapsed > timedelta(minutes=10):
                 return Response({"detail": "Test submission time exceeded the 10-minute limit."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # 🚫 Prevent double submission
             if session.completed:
                 return Response({"detail": "This test has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -163,6 +195,7 @@ class SubmitTestAPIView(APIView):
                         correct_mcq += 1
                     total_mcq += 1
 
+
                 elif question.question_type == "theory":
                     expected = question.expected_answer or question.correct_answer or "No expected answer provided."
                     grading_result = grade_theory_answer(
@@ -173,7 +206,9 @@ class SubmitTestAPIView(APIView):
                     theory_score = grading_result.get("score", 0)
                     if not isinstance(theory_score, (int, float)):
                         theory_score = 0
+
                     theory_scores.append(theory_score)
+
 
                 StudentAnswer.objects.create(
                     result=test_result,
@@ -196,12 +231,14 @@ class SubmitTestAPIView(APIView):
             session.submitted_at = timezone.now()
             session.completed = True
 
+            # ⏱️ Calculate duration of the test
             if session.started_at and session.submitted_at:
                 duration = (session.submitted_at - session.started_at).total_seconds()
-                session.duration = duration
+                session.duration = duration  # Only if `duration` field exists
 
             session.save()
 
+            # Final scoring
             score_percent = round((correct_mcq / total_mcq) * 100, 2) if total_mcq > 0 else 0
             avg_theory_score = round(sum(theory_scores) / len(theory_scores), 2) if theory_scores else 0
             combined_score = round((score_percent * 0.7 + avg_theory_score * 0.3), 2)
@@ -209,6 +246,7 @@ class SubmitTestAPIView(APIView):
             test_result.score = combined_score
             test_result.save()
 
+            # Generate PDF
             context = {
                 "student_name": getattr(request.user, 'full_name', '') or request.user.email,
                 "date": datetime.now(),
@@ -217,7 +255,7 @@ class SubmitTestAPIView(APIView):
                 "correct_mcq": correct_mcq,
                 "avg_theory_score": avg_theory_score,
                 "answers": detailed_answers,
-                "logo_path": logo_path,
+                "logo_path": logo_path,  # pass the full path
             }
 
             html_content = render_to_string("emails/test_result_report.html", context)
@@ -228,6 +266,7 @@ class SubmitTestAPIView(APIView):
             pdf_file.seek(0)
             pdf_content = pdf_file.read()
 
+            # Prepare email content
             email_subject = "iSchool Ola - Test Result"
             email_body = (
                 f"Dear {context['student_name']},\n\n"
@@ -235,10 +274,13 @@ class SubmitTestAPIView(APIView):
                 "Best regards,\niSchool Ola Team"
             )
 
+            # Determine recipients
             student_email = request.user.email
             parent_email = getattr(request.user.registration_group, 'email', None)
             recipients = list(filter(None, [student_email, parent_email]))
 
+
+           # ✅ Async email sending with threading (non-blocking)
             def _send_results():
                 for recipient in recipients:
                     try:
@@ -262,12 +304,14 @@ class SubmitTestAPIView(APIView):
             }, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # 👈 make it public
 def list_class_levels(request):
     class_levels = Test.objects.values_list('class_level', flat=True).distinct()
     return Response({'class_levels': list(class_levels)})
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -276,9 +320,13 @@ def list_subjects(request):
     if not class_level:
         return Response({'error': 'class_level parameter is required.'}, status=400)
     
-    # Get unique subjects from Subject model (not Test)
-    subjects = Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct()
+    # Try to get subjects from Subject model first, fallback to Test model
+    subjects = list(Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct())
+    if not subjects:
+        subjects = Test.objects.filter(class_level=class_level).values_list('subject_old', flat=True).distinct()
+    
     return Response({'subjects': list(subjects)})
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -289,16 +337,17 @@ def list_topics(request):
     if not class_level or not subject_name:
         return Response({'error': 'class_level and subject parameters are required.'}, status=400)
     
-    # Find subject first
+    # Try to get topics from Topic model first
     try:
         subject = Subject.objects.get(name=subject_name, class_level=class_level)
-        topics = Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct()
+        topics = list(Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct())
     except Subject.DoesNotExist:
-        topics = []
+        # Fallback to old method
+        topics = Test.objects.filter(class_level=class_level, subject_old=subject_name).values_list('topic_old', flat=True).distinct()
     
     return Response({'topics': list(topics)})
 
-# Keep other view functions but update them similarly
+
 class SubjectListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -307,9 +356,13 @@ class SubjectListAPIView(APIView):
         if not class_level:
             return Response({"error": "class_level query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Updated to use Subject model
-        subjects = Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct()
+        # Try Subject model first, fallback to Question model
+        subjects = list(Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct())
+        if not subjects:
+            subjects = Question.objects.filter(class_level=class_level).values_list('subject', flat=True).distinct()
+        
         return Response(list(subjects), status=status.HTTP_200_OK)
+
 
 class TopicListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -321,13 +374,94 @@ class TopicListAPIView(APIView):
         if not class_level or not subject_name:
             return Response({"error": "class_level and subject query parameters are required"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Try Topic model first
         try:
             subject = Subject.objects.get(name=subject_name, class_level=class_level)
-            topics = Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct()
+            topics = list(Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct())
         except Subject.DoesNotExist:
-            topics = []
-            
+            # Fallback to Question model
+            topics = Question.objects.filter(
+                class_level=class_level,
+                subject=subject_name
+            ).values_list('topic', flat=True).distinct()
+        
         return Response(list(topics), status=status.HTTP_200_OK)
 
-# Remove or comment out the old functions that don't work
-# The get_subjects and get_topics functions at the bottom should be removed or updated
+
+class TestFilterOptionsAPIView(APIView):
+    """Keep this class - it's used by the frontend"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        class_levels = [choice[0] for choice in CLASS_CHOICES]
+        
+        # Try to get from Subject/Topic models first
+        subjects = list(Subject.objects.values_list('name', flat=True).distinct())
+        topics = list(Topic.objects.values_list('name', flat=True).distinct())
+        
+        # Fallback to old method if no data
+        if not subjects:
+            subjects = Question.objects.values_list('subject', flat=True).distinct()
+        if not topics:
+            topics = Question.objects.values_list('topic', flat=True).distinct()
+        
+        return Response({
+            'class_levels': class_levels,
+            'subjects': list(subjects),
+            'topics': list(topics),
+        })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_subjects(request):
+    class_level = request.GET.get('class_level')
+    
+    # Try Subject model first
+    subjects = list(Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct())
+    if not subjects:
+        subjects = Question.objects.filter(class_level=class_level).values_list('subject', flat=True).distinct()
+    
+    return Response(list(subjects))
+
+
+# URL: /api/topics/?class_level=JSS1&subject=Math
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_topics(request):
+    class_level = request.GET.get('class_level')
+    subject_name = request.GET.get('subject')
+    
+    if not class_level or not subject_name:
+        return Response({"error": "class_level and subject parameters are required"}, status=400)
+    
+    # Try Topic model first
+    try:
+        subject = Subject.objects.get(name=subject_name, class_level=class_level)
+        topics = list(Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct())
+    except Subject.DoesNotExist:
+        # Fallback to Question model
+        topics = Question.objects.filter(
+            class_level=class_level, 
+            subject=subject_name
+        ).values_list('topic', flat=True).distinct()
+    
+    return Response(list(topics))
+
+
+@api_view(['GET'])
+def list_questions(request):
+    topic = request.GET.get('topic')
+    if not topic:
+        return Response({"error": "Topic parameter is required."}, status=400)
+    
+    # Find tests with matching topic (works with both old and new)
+    tests = Test.objects.filter(
+        Q(topic__name=topic) | Q(topic_old=topic)
+    )
+    
+    # Get all questions for these tests
+    questions = Question.objects.filter(test__in=tests)
+    
+    serializer = QuestionSerializer(questions, many=True)
+    return Response(serializer.data)
