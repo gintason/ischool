@@ -1,7 +1,20 @@
+# test_app/serializers.py
 from rest_framework import serializers
-from .models import Question, CLASS_CHOICES, Test, TestResult
+from .models import Question, CLASS_CHOICES, Test, TestResult, Subject, Topic
 
+# NEW: Subject Serializer
+class SubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subject
+        fields = ['id', 'name', 'class_level', 'description']
 
+# NEW: Topic Serializer
+class TopicSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    
+    class Meta:
+        model = Topic
+        fields = ['id', 'name', 'subject', 'subject_name', 'description', 'order']
 
 class QuestionSerializer(serializers.ModelSerializer):
     options = serializers.SerializerMethodField()
@@ -17,7 +30,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             "option_c",
             "option_d",
             "correct_answer",
-            "options",  # new field
+            "options",
         ]
 
     def get_options(self, obj):
@@ -32,21 +45,17 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Always remove internal fields from frontend response
         data.pop("option_a", None)
         data.pop("option_b", None)
         data.pop("option_c", None)
         data.pop("option_d", None)
-        data.pop("correct_answer", None)  # Hide correct answer from frontend
+        data.pop("correct_answer", None)
         return data
-
-
 
 class StartTestSerializer(serializers.Serializer):
     class_level = serializers.ChoiceField(choices=CLASS_CHOICES)
     subject = serializers.CharField()
     topic = serializers.CharField()
-
 
 class AnswerItemSerializer(serializers.Serializer):
     question_id = serializers.IntegerField()
@@ -66,26 +75,25 @@ class AnswerItemSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Theory answer cannot be empty.")
         return data
 
-
 class SubmitTestSerializer(serializers.Serializer):
-    session_id = serializers.UUIDField()  # Fix this line
+    session_id = serializers.UUIDField()
     answers = AnswerItemSerializer(many=True)
 
-
 class TestResultSummarySerializer(serializers.ModelSerializer):
+    date_taken = serializers.DateTimeField(source='created_at', read_only=True)
+    
     class Meta:
         model = TestResult
-        fields = ['subject', 'score', 'total_questions', 'created_at']
+        fields = ['subject', 'score', 'total_questions', 'date_taken']
         read_only_fields = fields
 
-    date_taken = serializers.DateTimeField(source='created_at', read_only=True)
-
-
-# test_app/serializers.py
-
+# Updated Test Serializer
 class TestSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    topic_name = serializers.CharField(source='topic.name', read_only=True)
+    
     class Meta:
         model = Test
-        fields = ['id', 'subject', 'topic', 'class_level', 'created_by', 'date_created']
+        fields = ['id', 'subject', 'subject_name', 'topic', 'topic_name', 'class_level', 'created_by', 'date_created']
         read_only_fields = ['id', 'created_by', 'date_created']
 

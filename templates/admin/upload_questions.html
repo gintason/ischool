@@ -1,0 +1,87 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module">
+        <h2>Upload Questions from Excel File</h2>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+            <h3>Excel File Format Requirements:</h3>
+            <p>Your Excel file should have the following columns:</p>
+            <ul>
+                <li><strong>question_text</strong> - The question text</li>
+                <li><strong>question_type</strong> - 'objective' or 'theory' (optional, defaults to 'objective')</li>
+                <li><strong>option_a</strong> - Option A</li>
+                <li><strong>option_b</strong> - Option B</li>
+                <li><strong>option_c</strong> - Option C</li>
+                <li><strong>option_d</strong> - Option D</li>
+                <li><strong>correct_answer</strong> - The correct answer (A, B, C, D, or text for theory)</li>
+            </ul>
+            <p><strong>Note:</strong> For theory questions, you can leave options empty and provide answer in correct_answer field.</p>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div style="margin-bottom: 15px;">
+                <label for="excel_file" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                    Select Excel File:
+                </label>
+                <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls" required style="padding: 5px;">
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <input type="submit" value="Upload Questions" class="default" style="background-color: #79aec8; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">
+                <a href="../" class="button" style="margin-left: 10px; padding: 8px 15px; background-color: #f0f0f0; text-decoration: none; border-radius: 4px;">Cancel</a>
+            </div>
+        </form>
+        
+        <div style="margin-top: 30px;">
+            <h3>Download Template:</h3>
+            <a href="#" id="download-template" class="button" style="padding: 8px 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 4px;">
+                Download Excel Template
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('download-template').addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        // Create template data
+        const templateData = [
+            ['question_text', 'question_type', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer'],
+            ['What is 2+2?', 'objective', '3', '4', '5', '6', 'B'],
+            ['What is the capital of France?', 'objective', 'London', 'Berlin', 'Paris', 'Madrid', 'C'],
+            ['Explain what is Django?', 'theory', '', '', '', '', 'Django is a Python web framework']
+        ];
+        
+        // Convert to CSV and download
+        const csvContent = templateData.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'questions_template.xls';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+</script>
+
+<style>
+    .default {
+        background-color: #79aec8 !important;
+    }
+    .button {
+        padding: 8px 15px;
+        background-color: #f0f0f0;
+        text-decoration: none;
+        border-radius: 4px;
+        color: #333;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
