@@ -1,0 +1,116 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module" style="background: white; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #1a1a1a; margin-bottom: 20px;">Upload Questions from JSON File</h2>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f4fd; border-left: 4px solid #007bff; border-radius: 5px;">
+            <h3 style="color: #1a1a1a; margin-top: 0;">📋 JSON Format Requirements:</h3>
+            <p style="color: #333;">Your JSON file should be an array of objects with the following structure:</p>
+            
+            <pre style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 12px;">
+{
+    "questions": [
+        {
+            "subject_name": "Agriculture",
+            "topic_name": "Importance of Agriculture",
+            "class_level": "JSS1",
+            "question_text": "What does the term 'agriculture' mean?",
+            "question_type": "mcq",
+            "option_a": "Cultivation of crops only",
+            "option_b": "Growing of crops and rearing of animals",
+            "option_c": "Study of animals",
+            "option_d": "Only farming",
+            "correct_answer": "B"
+        },
+        {
+            "subject_name": "English",
+            "topic_name": "Grammar",
+            "class_level": "JSS1",
+            "question_text": "What is a noun?",
+            "question_type": "theory",
+            "option_a": "",
+            "option_b": "",
+            "option_c": "",
+            "option_d": "",
+            "correct_answer": "A noun is a naming word"
+        }
+    ]
+}
+            </pre>
+            
+            <p style="color: #666; margin-top: 10px;">📝 <strong>Note:</strong> For theory questions, leave options empty and provide answer in correct_answer field.</p>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data" style="margin-top: 20px;">
+            {% csrf_token %}
+            <div style="margin-bottom: 15px;">
+                <label for="json_file" style="display: block; margin-bottom: 5px; font-weight: bold; color: #1a1a1a;">
+                    Select JSON File:
+                </label>
+                <input type="file" name="json_file" id="json_file" accept=".json" required style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 400px;">
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <input type="submit" value="Upload Questions" style="background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                <a href="../" style="margin-left: 10px; padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px;">Cancel</a>
+            </div>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #e8f4fd; border-radius: 5px;">
+            <h3 style="color: #1a1a1a; margin-top: 0;">📥 Download Template</h3>
+            <a href="#" id="download-template" style="background-color: #007bff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                Download JSON Template
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('download-template')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const template = {
+            "questions": [
+                {
+                    "subject_name": "Agriculture",
+                    "topic_name": "Importance of Agriculture",
+                    "class_level": "JSS1",
+                    "question_text": "What does the term 'agriculture' mean?",
+                    "question_type": "mcq",
+                    "option_a": "Cultivation of crops only",
+                    "option_b": "Growing of crops and rearing of animals for man's use",
+                    "option_c": "Study of animals",
+                    "option_d": "Only farming",
+                    "correct_answer": "B"
+                },
+                {
+                    "subject_name": "English",
+                    "topic_name": "Grammar",
+                    "class_level": "JSS1",
+                    "question_text": "What is a noun?",
+                    "question_type": "theory",
+                    "option_a": "",
+                    "option_b": "",
+                    "option_c": "",
+                    "option_d": "",
+                    "correct_answer": "A noun is a naming word"
+                }
+            ]
+        };
+        
+        const jsonStr = JSON.stringify(template, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'questions_template.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+</script>
+{% endblock %}

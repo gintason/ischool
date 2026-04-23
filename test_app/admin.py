@@ -5,6 +5,7 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 import pandas as pd
+import json
 from .models import (
     Question,
     Test,
@@ -54,7 +55,7 @@ class TopicAdmin(admin.ModelAdmin):
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ['text', 'question_type', 'get_subject', 'get_topic']
-    list_filter = ['question_type']  # Remove the invalid filters for now
+    list_filter = ['question_type']
     search_fields = ['text']
     
     def get_subject(self, obj):
@@ -73,11 +74,11 @@ class QuestionAdmin(admin.ModelAdmin):
         return '-'
     get_topic.short_description = 'Topic'
     
-    # Add custom URL for Excel upload
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
             path('upload-questions/', self.upload_questions, name='upload_questions'),
+            path('upload-json/', self.upload_json, name='upload_json'),  # Add JSON upload URL
         ]
         return custom_urls + urls
     
@@ -88,15 +89,154 @@ class QuestionAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['upload_url'] = 'upload-questions/'
         
-        # Add a button message
+        # Add buttons for both upload methods
         messages.info(request, mark_safe(
-            '<a href="upload-questions/" style="background-color: #28a745; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">'
-            '📤 Click here to upload questions from Excel'
+            '<div style="display: flex; gap: 10px; margin-bottom: 10px;">'
+            '<a href="upload-questions/" style="background-color: #28a745; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px;">'
+            '📊 Upload Excel/CSV'
             '</a>'
+            '<a href="upload-json/" style="background-color: #007bff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px;">'
+            '📄 Upload JSON'
+            '</a>'
+            '</div>'
         ))
         
         return super().changelist_view(request, extra_context=extra_context)
     
+    def upload_json(self, request):
+        """Handle JSON file upload for questions"""
+        if request.method == 'POST':
+            json_file = request.FILES.get('json_file')
+            
+            if not json_file:
+                messages.error(request, 'Please select a JSON file')
+                return HttpResponseRedirect('../')
+            
+            # Check file extension
+            if not json_file.name.endswith('.json'):
+                messages.error(request, 'Please upload a valid JSON file (.json)')
+                return HttpResponseRedirect('../')
+            
+            try:
+                # Read and parse JSON file
+                file_content = json_file.read().decode('utf-8')
+                data = json.loads(file_content)
+                
+                # Handle both array and object formats
+                if isinstance(data, dict):
+                    # If it's a dict, look for questions key
+                    questions_data = data.get('questions', [])
+                elif isinstance(data, list):
+                    questions_data = data
+                else:
+                    messages.error(request, 'Invalid JSON format. Expected array or object with "questions" key.')
+                    return HttpResponseRedirect('../')
+                
+                if not questions_data:
+                    messages.error(request, 'No questions found in JSON file')
+                    return HttpResponseRedirect('../')
+                
+                created_count = 0
+                error_count = 0
+                errors = []
+                
+                for index, q in enumerate(questions_data):
+                    try:
+                        # Extract question data with defaults
+                        subject_name = q.get('subject_name', '')
+                        topic_name = q.get('topic_name', '')
+                        class_level = q.get('class_level', '').upper()
+                        question_text = q.get('question_text', '')
+                        question_type = q.get('question_type', 'mcq').lower()
+                        option_a = q.get('option_a', '')
+                        option_b = q.get('option_b', '')
+                        option_c = q.get('option_c', '')
+                        option_d = q.get('option_d', '')
+                        correct_answer = q.get('correct_answer', '')
+                        
+                        # Validate required fields
+                        if not subject_name:
+                            errors.append(f"Question {index + 1}: Missing subject_name")
+                            error_count += 1
+                            continue
+                        if not topic_name:
+                            errors.append(f"Question {index + 1}: Missing topic_name")
+                            error_count += 1
+                            continue
+                        if not class_level:
+                            errors.append(f"Question {index + 1}: Missing class_level")
+                            error_count += 1
+                            continue
+                        if not question_text:
+                            errors.append(f"Question {index + 1}: Missing question_text")
+                            error_count += 1
+                            continue
+                        
+                        # Get or create Subject
+                        subject, _ = Subject.objects.get_or_create(
+                            name=subject_name,
+                            class_level=class_level
+                        )
+                        
+                        # Get or create Topic
+                        topic, _ = Topic.objects.get_or_create(
+                            name=topic_name,
+                            subject=subject
+                        )
+                        
+                        # Get or create Test
+                        test, created = Test.objects.get_or_create(
+                            class_level=class_level,
+                            subject_fk=subject,
+                            topic_fk=topic,
+                            defaults={
+                                'created_by': request.user,
+                                'subject': subject_name,
+                                'topic': topic_name
+                            }
+                        )
+                        
+                        if not created and not test.created_by:
+                            test.created_by = request.user
+                            test.save()
+                        
+                        # Create Question
+                        Question.objects.create(
+                            test=test,
+                            text=question_text,
+                            question_type=question_type,
+                            option_a=option_a,
+                            option_b=option_b,
+                            option_c=option_c,
+                            option_d=option_d,
+                            correct_answer=str(correct_answer).upper() if correct_answer else ''
+                        )
+                        
+                        created_count += 1
+                        
+                    except Exception as e:
+                        error_count += 1
+                        errors.append(f"Question {index + 1}: {str(e)}")
+                
+                # Show results
+                if created_count > 0:
+                    messages.success(request, f'✅ Successfully uploaded {created_count} questions from JSON!')
+                
+                if error_count > 0:
+                    messages.warning(request, f'⚠️ {error_count} errors. Details: {"; ".join(errors[:5])}')
+                
+            except json.JSONDecodeError as e:
+                messages.error(request, f'Invalid JSON format: {str(e)}')
+            except Exception as e:
+                messages.error(request, f'Error reading JSON file: {str(e)}')
+            
+            return HttpResponseRedirect('../')
+        
+        # GET request - show upload form
+        return render(request, 'admin/upload_json.html', {
+            'title': 'Upload Questions from JSON',
+            'opts': self.model._meta,
+        })
     
     def upload_questions(self, request):
         if request.method == 'POST':
