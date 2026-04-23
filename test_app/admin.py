@@ -113,114 +113,82 @@ class QuestionAdmin(admin.ModelAdmin):
                 return HttpResponseRedirect('../')
             
             try:
-                import openpyxl
+                import pandas as pd
                 from io import BytesIO
                 
-                # Read the Excel file
+                # Read the Excel file using pandas
                 file_data = BytesIO(excel_file.read())
                 
-                # Try to load the workbook
+                # Try to read with pandas
                 try:
-                    workbook = openpyxl.load_workbook(file_data, data_only=True)
+                    df = pd.read_excel(file_data, engine='openpyxl')
                 except Exception as e:
-                    messages.error(request, f'Could not read Excel file: {str(e)}')
+                    messages.error(request, f'Could not read Excel file. Please ensure it is a valid .xlsx file. Error: {str(e)}')
                     return HttpResponseRedirect('../')
                 
-                # Get the active sheet
-                sheet = workbook.active
-                if sheet is None:
-                    messages.error(request, 'Excel file has no worksheets')
+                # Check if dataframe is empty
+                if df.empty:
+                    messages.error(request, 'Excel file is empty. Please add data to your file.')
                     return HttpResponseRedirect('../')
                 
-                # Check if sheet has any rows
-                if sheet.max_row is None or sheet.max_row < 1:
-                    messages.error(request, 'Excel file is empty')
-                    return HttpResponseRedirect('../')
+                # Convert column names to lowercase for consistency
+                df.columns = df.columns.str.lower().str.strip()
                 
-                # Get headers from first row (handle None values)
-                headers = []
-                for col in range(1, sheet.max_column + 1):
-                    if sheet.max_column is None:
-                        break
-                    cell_value = sheet.cell(row=1, column=col).value
-                    if cell_value:
-                        headers.append(str(cell_value).strip().lower())
-                
-                if not headers:
-                    messages.error(request, 'Could not read headers from Excel file. Please ensure the first row contains column names.')
-                    return HttpResponseRedirect('../')
-                
-                # Required columns (case insensitive)
+                # Required columns
                 required_columns = ['subject_name', 'topic_name', 'class_level', 'question_text', 'question_type', 
                                 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
                 
-                # Map actual headers to required columns (case insensitive)
-                header_map = {}
-                for req_col in required_columns:
-                    for header in headers:
-                        if header.lower() == req_col.lower():
-                            header_map[req_col] = header
-                            break
-                
                 # Check for missing columns
-                missing_columns = [col for col in required_columns if col not in header_map]
+                missing_columns = [col for col in required_columns if col not in df.columns]
                 if missing_columns:
-                    messages.error(request, f'Missing columns: {", ".join(missing_columns)}. Found headers: {headers}')
+                    messages.error(request, f'Missing columns: {", ".join(missing_columns)}. Found columns: {list(df.columns)}')
                     return HttpResponseRedirect('../')
-                
-                # Get column indices
-                col_indices = {}
-                for col_num, header in enumerate(headers, 1):
-                    for req_col in required_columns:
-                        if header.lower() == req_col.lower():
-                            col_indices[req_col] = col_num
-                            break
                 
                 created_count = 0
                 error_count = 0
                 errors = []
                 
-                # Process each row (starting from row 2)
-                for row_num in range(2, sheet.max_row + 1):
+                # Process each row
+                for index, row in df.iterrows():
                     try:
-                        # Get values from each column (handle None values)
-                        subject_name = sheet.cell(row=row_num, column=col_indices['subject_name']).value
-                        topic_name = sheet.cell(row=row_num, column=col_indices['topic_name']).value
-                        class_level = sheet.cell(row=row_num, column=col_indices['class_level']).value
-                        question_text = sheet.cell(row=row_num, column=col_indices['question_text']).value
-                        question_type = sheet.cell(row=row_num, column=col_indices['question_type']).value
-                        option_a = sheet.cell(row=row_num, column=col_indices['option_a']).value
-                        option_b = sheet.cell(row=row_num, column=col_indices['option_b']).value
-                        option_c = sheet.cell(row=row_num, column=col_indices['option_c']).value
-                        option_d = sheet.cell(row=row_num, column=col_indices['option_d']).value
-                        correct_answer = sheet.cell(row=row_num, column=col_indices['correct_answer']).value
+                        # Get values (handle NaN)
+                        subject_name = row['subject_name']
+                        topic_name = row['topic_name']
+                        class_level = row['class_level']
+                        question_text = row['question_text']
+                        question_type = row['question_type']
+                        option_a = row['option_a']
+                        option_b = row['option_b']
+                        option_c = row['option_c']
+                        option_d = row['option_d']
+                        correct_answer = row['correct_answer']
                         
                         # Skip empty rows
-                        if not question_text or str(question_text).strip() == '':
+                        if pd.isna(question_text) or str(question_text).strip() == '':
                             continue
                         
-                        # Convert to string and strip
-                        subject_name = str(subject_name).strip() if subject_name else ''
-                        topic_name = str(topic_name).strip() if topic_name else ''
-                        class_level = str(class_level).strip().upper() if class_level else ''
+                        # Convert to string and handle NaN
+                        subject_name = str(subject_name).strip() if not pd.isna(subject_name) else ''
+                        topic_name = str(topic_name).strip() if not pd.isna(topic_name) else ''
+                        class_level = str(class_level).strip().upper() if not pd.isna(class_level) else ''
                         question_text = str(question_text).strip()
                         
                         # Validate required fields
                         if not subject_name:
-                            errors.append(f"Row {row_num}: Missing subject_name")
+                            errors.append(f"Row {index + 2}: Missing subject_name")
                             error_count += 1
                             continue
                         if not topic_name:
-                            errors.append(f"Row {row_num}: Missing topic_name")
+                            errors.append(f"Row {index + 2}: Missing topic_name")
                             error_count += 1
                             continue
                         if not class_level:
-                            errors.append(f"Row {row_num}: Missing class_level")
+                            errors.append(f"Row {index + 2}: Missing class_level")
                             error_count += 1
                             continue
                         
                         # Process question_type
-                        if not question_type:
+                        if pd.isna(question_type) or not question_type:
                             question_type = 'mcq'
                         else:
                             question_type = str(question_type).lower().strip()
@@ -255,12 +223,12 @@ class QuestionAdmin(admin.ModelAdmin):
                             test.created_by = request.user
                             test.save()
                         
-                        # Get option values
-                        opt_a = str(option_a).strip() if option_a else ''
-                        opt_b = str(option_b).strip() if option_b else ''
-                        opt_c = str(option_c).strip() if option_c else ''
-                        opt_d = str(option_d).strip() if option_d else ''
-                        correct = str(correct_answer).strip().upper() if correct_answer else ''
+                        # Get option values (handle NaN)
+                        opt_a = str(option_a).strip() if not pd.isna(option_a) else ''
+                        opt_b = str(option_b).strip() if not pd.isna(option_b) else ''
+                        opt_c = str(option_c).strip() if not pd.isna(option_c) else ''
+                        opt_d = str(option_d).strip() if not pd.isna(option_d) else ''
+                        correct = str(correct_answer).strip().upper() if not pd.isna(correct_answer) else ''
                         
                         # Create Question
                         Question.objects.create(
@@ -278,7 +246,7 @@ class QuestionAdmin(admin.ModelAdmin):
                         
                     except Exception as e:
                         error_count += 1
-                        errors.append(f"Row {row_num}: {str(e)}")
+                        errors.append(f"Row {index + 2}: {str(e)}")
                 
                 # Show results
                 if created_count > 0:
