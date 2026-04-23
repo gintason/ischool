@@ -105,91 +105,122 @@ class QuestionAdmin(admin.ModelAdmin):
                 messages.error(request, 'Please select an Excel file')
                 return HttpResponseRedirect('../')
             
-            if not excel_file.name.endswith(('.xlsx', '.xls')):
+            # Check file extension
+            file_ext = excel_file.name.split('.')[-1].lower()
+            if file_ext not in ['xlsx', 'xls']:
                 messages.error(request, 'Please upload a valid Excel file (.xlsx or .xls)')
                 return HttpResponseRedirect('../')
             
             try:
-                df = pd.read_excel(excel_file)
+                import openpyxl
+                from io import BytesIO
                 
+                # Read the Excel file
+                file_data = BytesIO(excel_file.read())
+                workbook = openpyxl.load_workbook(file_data, data_only=True)
+                sheet = workbook.active
+                
+                # Get headers from first row
+                headers = []
+                for col in range(1, sheet.max_column + 1):
+                    header = sheet.cell(row=1, column=col).value
+                    if header:
+                        headers.append(str(header).strip())
+                
+                # Required columns
                 required_columns = ['subject_name', 'topic_name', 'class_level', 'question_text', 'question_type', 
                                 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer']
                 
-                missing_columns = [col for col in required_columns if col not in df.columns]
+                # Check if all required columns exist
+                missing_columns = [col for col in required_columns if col not in headers]
                 if missing_columns:
-                    messages.error(request, f'Missing columns: {", ".join(missing_columns)}')
+                    messages.error(request, f'Missing columns: {", ".join(missing_columns)}. Please use the template format.')
                     return HttpResponseRedirect('../')
+                
+                # Get column indices
+                col_indices = {header: idx + 1 for idx, header in enumerate(headers)}
                 
                 created_count = 0
                 error_count = 0
-                tests_created = 0
                 errors = []
                 
-                for index, row in df.iterrows():
+                # Process each row (starting from row 2)
+                for row_num in range(2, sheet.max_row + 1):
                     try:
-                        # Step 1: Get or create Subject
-                        subject, subject_created = Subject.objects.get_or_create(
-                            name=row['subject_name'],
-                            class_level=row['class_level']
+                        # Get values from each column
+                        subject_name = sheet.cell(row=row_num, column=col_indices['subject_name']).value
+                        topic_name = sheet.cell(row=row_num, column=col_indices['topic_name']).value
+                        class_level = sheet.cell(row=row_num, column=col_indices['class_level']).value
+                        question_text = sheet.cell(row=row_num, column=col_indices['question_text']).value
+                        question_type = sheet.cell(row=row_num, column=col_indices['question_type']).value
+                        option_a = sheet.cell(row=row_num, column=col_indices['option_a']).value
+                        option_b = sheet.cell(row=row_num, column=col_indices['option_b']).value
+                        option_c = sheet.cell(row=row_num, column=col_indices['option_c']).value
+                        option_d = sheet.cell(row=row_num, column=col_indices['option_d']).value
+                        correct_answer = sheet.cell(row=row_num, column=col_indices['correct_answer']).value
+                        
+                        # Skip empty rows
+                        if not question_text:
+                            continue
+                        
+                        # Default values
+                        if not question_type:
+                            question_type = 'mcq'
+                        else:
+                            question_type = str(question_type).lower().strip()
+                        
+                        # Get or create Subject
+                        subject, _ = Subject.objects.get_or_create(
+                            name=str(subject_name).strip(),
+                            class_level=str(class_level).strip()
                         )
                         
-                        # Step 2: Get or create Topic under this Subject
-                        topic, topic_created = Topic.objects.get_or_create(
-                            name=row['topic_name'],
+                        # Get or create Topic
+                        topic, _ = Topic.objects.get_or_create(
+                            name=str(topic_name).strip(),
                             subject=subject
                         )
                         
-                        # Step 3: Get or create Test (this links subject and topic)
-                        test, test_created = Test.objects.get_or_create(
-                            class_level=row['class_level'],
+                        # Get or create Test
+                        test, created = Test.objects.get_or_create(
+                            class_level=str(class_level).strip(),
                             subject_fk=subject,
                             topic_fk=topic,
                             defaults={
                                 'created_by': request.user,
-                                'subject': row['subject_name'],  # Keep old field for compatibility
-                                'topic': row['topic_name']       # Keep old field for compatibility
+                                'subject': str(subject_name).strip(),
+                                'topic': str(topic_name).strip()
                             }
                         )
                         
-                        if test_created:
-                            tests_created += 1
-                        
-                        # If test exists but no created_by, update it
-                        if not test_created and not test.created_by:
+                        if not created and not test.created_by:
                             test.created_by = request.user
-                            test.subject = row['subject_name']
-                            test.topic = row['topic_name']
                             test.save()
                         
-                        # Step 4: Create Question linked to this Test
+                        # Create Question
                         question = Question.objects.create(
                             test=test,
-                            text=row['question_text'],
-                            question_type=row['question_type'] if pd.notna(row['question_type']) else 'mcq',
-                            option_a=str(row['option_a']) if pd.notna(row['option_a']) else '',
-                            option_b=str(row['option_b']) if pd.notna(row['option_b']) else '',
-                            option_c=str(row['option_c']) if pd.notna(row['option_c']) else '',
-                            option_d=str(row['option_d']) if pd.notna(row['option_d']) else '',
-                            correct_answer=str(row['correct_answer']) if pd.notna(row['correct_answer']) else '',
+                            text=str(question_text).strip(),
+                            question_type=question_type,
+                            option_a=str(option_a).strip() if option_a else '',
+                            option_b=str(option_b).strip() if option_b else '',
+                            option_c=str(option_c).strip() if option_c else '',
+                            option_d=str(option_d).strip() if option_d else '',
+                            correct_answer=str(correct_answer).strip().upper() if correct_answer else ''
                         )
                         
                         created_count += 1
                         
                     except Exception as e:
                         error_count += 1
-                        errors.append(f"Row {index + 2}: {str(e)}")
+                        errors.append(f"Row {row_num}: {str(e)}")
                 
-                # Summary message
-                summary = f'Successfully uploaded {created_count} questions! '
-                if tests_created > 0:
-                    summary += f'Created {tests_created} new test(s). '
-                summary += f'Errors: {error_count}'
-                
+                # Show results
                 if created_count > 0:
-                    messages.success(request, summary)
+                    messages.success(request, f'✅ Successfully uploaded {created_count} questions!')
                 
-                if errors:
-                    messages.warning(request, f'Partial success. Errors: {"; ".join(errors[:5])}')
+                if error_count > 0:
+                    messages.warning(request, f'⚠️ {error_count} errors. First few: {"; ".join(errors[:3])}')
                 
             except Exception as e:
                 messages.error(request, f'Error reading Excel file: {str(e)}')
@@ -200,7 +231,7 @@ class QuestionAdmin(admin.ModelAdmin):
             'title': 'Upload Questions from Excel',
             'opts': self.model._meta,
         })
-    
+        
 
 @admin.register(Test)
 class TestAdmin(admin.ModelAdmin):
