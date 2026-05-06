@@ -65,7 +65,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
 ROOT_URLCONF = "iSchool_Ola.urls"
 
 TEMPLATES = [

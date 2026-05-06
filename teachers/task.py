@@ -17,10 +17,7 @@ from django.utils.timezone import now
 def generate_weekly_attendance_summary():
     Command().handle()
 
-
-
 LESSON_RATE = 500  # Set your fixed rate per lesson here (₦)
-
 
 @shared_task
 def generate_monthly_teacher_payroll():

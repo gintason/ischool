@@ -27,6 +27,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from io import BytesIO
 from django.core.mail import send_mail
+from django.utils import timezone
+from datetime import timedelta
+
+
 
 @admin.register(TeacherApplication)
 class TeacherApplicationAdmin(admin.ModelAdmin):
@@ -125,36 +129,248 @@ class OleStudentMatchInline(admin.TabularInline):
 
 @admin.register(LiveClassSchedule)
 class LiveClassScheduleAdmin(admin.ModelAdmin):
-    list_display = ['teacher_email', 'subject_name', 'class_level_name', 'start_time', 'end_time', 'total_matched_students']
-    list_filter = ['class_level', 'subject', 'teacher']  # Will render as dropdowns
-    search_fields = ['teacher__email', 'subject__name']
-    actions = ['run_auto_scheduler']
-    inlines = [OleStudentMatchInline]  # ✅ Add this line
-
+    list_display = [
+        'teacher_email', 
+        'subject_name', 
+        'class_level_name', 
+        'start_time', 
+        'end_time', 
+        'date',  # ✅ Added date to see when class happens
+        'total_matched_students',
+        'auto_match_status'  # ✅ NEW: Shows if auto-matched
+    ]
+    list_filter = ['class_level', 'subject', 'teacher', 'date']  # ✅ Added date filter
+    search_fields = ['teacher__email', 'subject__name', 'class_level__name']
+    actions = ['run_auto_scheduler', 'force_rematch_students', 'show_matching_details']  # ✅ NEW actions
+    inlines = [OleStudentMatchInline]
+    readonly_fields = ['match_summary', 'match_timestamp']  # ✅ NEW: Show match details in detail view
 
     def subject_name(self, obj):
         return obj.subject.name
     subject_name.short_description = 'Subject'
+    subject_name.admin_order_field = 'subject__name'  # ✅ Allow sorting
 
     def class_level_name(self, obj):
         return obj.class_level.name
     class_level_name.short_description = 'Class Level'
+    class_level_name.admin_order_field = 'class_level__name'  # ✅ Allow sorting
 
     def teacher_email(self, obj):
         return obj.teacher.email
     teacher_email.short_description = 'Teacher Email'
+    teacher_email.admin_order_field = 'teacher__email'  # ✅ Allow sorting
 
     def total_matched_students(self, obj):
-        return obj.matched_students.count()
-    total_matched_students.short_description = 'Matched Students'
+        count = obj.matched_students.count()
+        if count > 0:
+            # Color code based on count
+            if count >= 10:
+                color = 'green'
+            elif count >= 5:
+                color = 'orange'
+            else:
+                color = 'red'
+            return format_html('<span style="color: {}; font-weight: bold;">{} student(s)</span>', color, count)
+        return format_html('<span style="color: gray;">0 students</span>')
+    total_matched_students.short_description = '📚 Matched Students'
+    total_matched_students.admin_order_field = 'matched_students__count'
+
+    def auto_match_status(self, obj):
+        """Show if this schedule was automatically matched"""
+        if obj.matched_students.exists():
+            # Check when first student was matched
+            first_match = obj.matched_students.first()
+            if first_match:
+                # If matched within 5 minutes of creation, assume auto-match
+                time_diff = first_match.assigned_at - (obj.date if hasattr(obj, 'created_at') else timezone.now())
+                if time_diff.total_seconds() < 300:  # 5 minutes
+                    return format_html('<span style="color: green;">✅ Auto-matched</span>')
+                return format_html('<span style="color: blue;">✓ Manually matched</span>')
+        return format_html('<span style="color: orange;">⚠️ No matches yet</span>')
+    auto_match_status.short_description = 'Match Status'
+
+    def match_summary(self, obj):
+        """Show detailed match summary in detail view"""
+        matches = obj.matched_students.select_related('student').all()
+        
+        if not matches:
+            return format_html(
+                '<div style="padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107;">'
+                '<strong>⚠️ No students matched yet.</strong><br>'
+                'Click "Force Re-match" below to automatically match students.'
+                '</div>'
+            )
+        
+        # Count matches
+        total_matches = matches.count()
+        
+        # Get unique class levels (should all be same)
+        class_levels = set(match.student.ole_class_level.name for match in matches if match.student.ole_class_level)
+        
+        # Get unique subjects (should all be same)
+        subjects = set(match.student.ole_subjects.filter(id=obj.subject.id).exists() for match in matches)
+        
+        # Show recent matches (last 10)
+        recent_matches = matches.order_by('-assigned_at')[:10]
+        
+        html = f'''
+        <div style="padding: 15px; background: #d4edda; border-left: 4px solid #28a745; margin-bottom: 10px;">
+            <strong>✅ Match Summary:</strong><br>
+            Total Matched Students: <strong>{total_matches}</strong><br>
+            Class Level: {', '.join(class_levels) if class_levels else 'Not specified'}<br>
+            Auto-match Status: <strong>Enabled</strong>
+        </div>
+        
+        <div style="padding: 15px; background: #e7f3ff; border-left: 4px solid #2196F3;">
+            <strong>👨‍🎓 Recently Matched Students:</strong>
+            <ul style="margin: 10px 0 0 20px;">
+        '''
+        
+        for match in recent_matches:
+            html += f'<li><strong>{match.student.full_name}</strong> ({match.student.email}) - Matched at {match.assigned_at.strftime("%Y-%m-%d %H:%M:%S")}</li>'
+        
+        if total_matches > 10:
+            html += f'<li><em>... and {total_matches - 10} more students</em></li>'
+        
+        html += '''
+            </ul>
+        </div>
+        '''
+        
+        return format_html(html)
+    match_summary.short_description = '👥 Student Match Details'
+
+    def match_timestamp(self, obj):
+        """Show when first match was created"""
+        first_match = obj.matched_students.first()
+        if first_match:
+            return first_match.assigned_at
+        return "Not yet matched"
+    match_timestamp.short_description = 'First Match Created'
+
+    def force_rematch_students(self, request, queryset):
+        """Admin action to manually trigger re-matching"""
+        from .utils.scheduler import auto_match_students_to_schedule
+        
+        total_matched = 0
+        schedules_processed = 0
+        
+        for schedule in queryset:
+            try:
+                matched = auto_match_students_to_schedule(schedule)
+                total_matched += matched
+                schedules_processed += 1
+            except Exception as e:
+                self.message_user(
+                    request,
+                    f"❌ Error processing schedule #{schedule.id}: {str(e)}",
+                    level=messages.ERROR
+                )
+        
+        self.message_user(
+            request,
+            f"✅ Re-matched {total_matched} students across {schedules_processed} schedules",
+            level=messages.SUCCESS
+        )
+    force_rematch_students.short_description = "🔄 Force re-match students for selected schedules"
+
+    def show_matching_details(self, request, queryset):
+        """Show detailed matching information for selected schedules"""
+        from io import StringIO
+        import csv
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="matching_details.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Schedule ID', 'Subject', 'Class Level', 'Teacher', 'Date', 'Start Time',
+            'Total Matched Students', 'Student Names', 'Student Emails', 'Match Timestamps'
+        ])
+        
+        for schedule in queryset:
+            matches = schedule.matched_students.select_related('student').all()
+            
+            if matches:
+                student_names = '; '.join([match.student.full_name for match in matches])
+                student_emails = '; '.join([match.student.email for match in matches])
+                match_times = '; '.join([match.assigned_at.strftime("%Y-%m-%d %H:%M") for match in matches])
+                
+                writer.writerow([
+                    schedule.id,
+                    schedule.subject.name,
+                    schedule.class_level.name,
+                    schedule.teacher.full_name,
+                    schedule.date,
+                    schedule.start_time,
+                    matches.count(),
+                    student_names,
+                    student_emails,
+                    match_times
+                ])
+            else:
+                writer.writerow([
+                    schedule.id,
+                    schedule.subject.name,
+                    schedule.class_level.name,
+                    schedule.teacher.full_name,
+                    schedule.date,
+                    schedule.start_time,
+                    0,
+                    'No matches',
+                    'No matches',
+                    'N/A'
+                ])
+        
+        self.message_user(
+            request,
+            f"📊 Exported matching details for {queryset.count()} schedules",
+            level=messages.SUCCESS
+        )
+        return response
+    show_matching_details.short_description = "📊 Export matching details (CSV)"
 
     def run_auto_scheduler(self, request, queryset):
-        results = auto_schedule_classes(days=1)  # Adjust to your needs
-        for msg in results:
-            self.message_user(request, msg, messages.INFO)
-
+        """Run auto-scheduler for selected schedules"""
+        from .services.scheduler import auto_schedule_classes
+    
+        try:
+            results = auto_schedule_classes(days=1)
+            for msg in results:
+                self.message_user(request, msg, messages.INFO)
+        except Exception as e:
+            self.message_user(
+                request,
+                f"❌ Auto-scheduler error: {str(e)}",
+                level=messages.ERROR
+            )
     run_auto_scheduler.short_description = "📅 Auto-Schedule Classes (Today)"
 
+    # Add custom buttons to change list
+    change_list_template = 'admin/teachers/liveclassschedule/change_list.html'
+
+    def changelist_view(self, request, extra_context=None):
+        """Add extra context to changelist view"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        extra_context = extra_context or {}
+        
+        # Get statistics for dashboard
+        upcoming_schedules = self.model.objects.filter(date__gte=timezone.localdate())
+        total_upcoming = upcoming_schedules.count()
+        total_matches = sum(sched.matched_students.count() for sched in upcoming_schedules)
+        schedules_without_matches = upcoming_schedules.filter(matched_students__isnull=True).count()
+        
+        extra_context.update({
+            'total_upcoming': total_upcoming,
+            'total_matches': total_matches,
+            'schedules_without_matches': schedules_without_matches,
+            'match_percentage': (total_matches / (total_upcoming or 1)) * 100,
+        })
+        
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 
@@ -251,6 +467,47 @@ class TeacherAssignmentAdmin(admin.ModelAdmin):
     list_display = ('teacher', 'subject', 'class_level')
     list_filter = ('subject', 'class_level')
     search_fields = ('teacher__email', 'teacher__full_name')
+    actions = ['auto_match_students']
+    
+    def auto_match_students(self, request, queryset):
+        """Manually trigger student matching for selected assignments"""
+        matched_total = 0
+        
+        for assignment in queryset:
+            students = CustomUser.objects.filter(
+                role='ole_student',
+                ole_class_level=assignment.class_level,
+                ole_subjects=assignment.subject
+            )
+            
+            # Find or create a schedule
+            tomorrow = timezone.localdate() + timedelta(days=1)
+            schedule, created = LiveClassSchedule.objects.get_or_create(
+                teacher=assignment.teacher,
+                subject=assignment.subject,
+                class_level=assignment.class_level,
+                date=tomorrow,
+                defaults={
+                    'start_time': timezone.datetime.strptime('10:00', '%H:%M').time(),
+                    'end_time': timezone.datetime.strptime('11:00', '%H:%M').time(),
+                }
+            )
+            
+            for student in students:
+                match, created = OleStudentMatch.objects.get_or_create(
+                    student=student,
+                    schedule=schedule
+                )
+                if created:
+                    matched_total += 1
+        
+        self.message_user(
+            request, 
+            f"✅ Matched {matched_total} students to their teachers!",
+            level=messages.SUCCESS
+        )
+    
+    auto_match_students.short_description = "Auto-match students to these teacher assignments"
 
 
 # Register remaining models with default admin behavior
