@@ -10,14 +10,12 @@ from teachers.models import (
 from users.models import CustomUser
 from .utils.scheduler import auto_match_students_to_schedule
 
-
 @receiver(post_save, sender=LiveClassSchedule)
 def match_students_on_schedule_create(sender, instance, created, **kwargs):
     """When a schedule is created, automatically match students"""
     if created:
         matched = auto_match_students_to_schedule(instance)
         print(f"[AUTO MATCH] {matched} students matched to schedule #{instance.id}")
-
 
 @receiver(post_save, sender=TeacherAssignment)
 def auto_match_students_on_teacher_assignment(sender, instance, created, **kwargs):

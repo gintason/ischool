@@ -2,34 +2,74 @@
 
 {% block result_list %}
     {% if total_upcoming %}
-    <div style="margin-bottom: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #4caf50; border-radius: 4px;">
-        <h3>🤖 Auto-Matching Dashboard</h3>
-        <div style="display: flex; gap: 20px; margin-top: 10px;">
-            <div>
-                <strong>📅 Upcoming Classes:</strong> {{ total_upcoming }}
+    <div style="margin-bottom: 25px; padding: 20px; background: #f0f9ff; border-left: 6px solid #4caf50; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <h3 style="color: #2c3e50; font-size: 20px; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #4caf50;">
+            🤖 Auto-Matching Dashboard
+        </h3>
+        
+        <div style="display: flex; gap: 30px; margin-top: 15px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 150px; background: white; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="font-size: 32px; margin-bottom: 5px;">📅</div>
+                <div style="font-size: 36px; font-weight: bold; color: #2196F3;">{{ total_upcoming }}</div>
+                <div style="font-size: 14px; color: #666; margin-top: 5px;"><strong>Upcoming Classes</strong></div>
             </div>
-            <div>
-                <strong>👥 Total Matched Students:</strong> {{ total_matches }}
+            
+            <div style="flex: 1; min-width: 150px; background: white; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="font-size: 32px; margin-bottom: 5px;">👥</div>
+                <div style="font-size: 36px; font-weight: bold; color: #4CAF50;">{{ total_matches }}</div>
+                <div style="font-size: 14px; color: #666; margin-top: 5px;"><strong>Total Matched Students</strong></div>
             </div>
-            <div>
-                <strong>⚠️ Classes Without Matches:</strong> {{ schedules_without_matches }}
+            
+            <div style="flex: 1; min-width: 150px; background: white; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="font-size: 32px; margin-bottom: 5px;">⚠️</div>
+                <div style="font-size: 36px; font-weight: bold; color: #f44336;">
+                    {{ schedules_without_matches }}
+                </div>
+                <div style="font-size: 14px; color: #666; margin-top: 5px;"><strong>Classes Without Matches</strong></div>
             </div>
-            <div>
-                <strong>📊 Match Rate:</strong> {{ match_percentage|floatformat:1 }}%
+            
+            <div style="flex: 1; min-width: 150px; background: white; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="font-size: 32px; margin-bottom: 5px;">📊</div>
+                <div style="font-size: 36px; font-weight: bold; color: #FF9800;">{{ match_percentage|floatformat:1 }}%</div>
+                <div style="font-size: 14px; color: #666; margin-top: 5px;"><strong>Match Rate</strong></div>
             </div>
         </div>
+        
         {% if schedules_without_matches > 0 %}
-        <div style="margin-top: 10px;">
-            <form action="" method="POST">
-                {% csrf_token %}
-                <button type="submit" name="action" value="force_rematch_students" 
-                        style="background: #4caf50; color: white; border: none; padding: 5px 10px; cursor: pointer;">
-                    🔄 Force Re-match All Students
-                </button>
-            </form>
+        <div style="margin-top: 20px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div style="color: #856404;">
+                    <strong>⚠️ {{ schedules_without_matches }} class(es) have no students matched!</strong>
+                    <span style="margin-left: 10px;">Click the button below to auto-match students.</span>
+                </div>
+                <form action="" method="POST" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="force_rematch_students">
+                    <select name="_selected_action" multiple style="display: none;">
+                        {% for schedule in cl.result_list %}
+                            <option value="{{ schedule.pk }}" selected></option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" style="background: #4caf50; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        🔄 Force Re-match All Students
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div style="margin-top: 20px; padding: 12px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">
+            <div style="color: #155724;">
+                <strong>✅ Perfect!</strong> All classes have students matched.
+            </div>
         </div>
         {% endif %}
     </div>
+    {% else %}
+    <div style="margin-bottom: 25px; padding: 20px; background: #fff3cd; border-left: 6px solid #ffc107; border-radius: 8px;">
+        <h3 style="margin: 0 0 10px 0; color: #856404;">📅 No Upcoming Classes</h3>
+        <p style="margin: 0; color: #856404;">There are no upcoming classes scheduled. Create a schedule to see the dashboard.</p>
+    </div>
     {% endif %}
+    
     {{ block.super }}
 {% endblock %}
