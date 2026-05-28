@@ -16,18 +16,11 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# ✅ FIXED ALLOWED_HOSTS - removed invalid entries
-ALLOWED_HOSTS = [
-    'ischool-backend.onrender.com',
-    "ischool.ng",
-    "www.ischool.ng",
-    "api.ischool.ng",
-    "localhost",
-    "127.0.0.1",
-    "::1",
-    "10.183.201.137",  # 👈 Add your computer's IP address
-    "10.0.2.2", 
-]
+# ALLOWED_HOSTS - Read from environment variable for production
+if DEBUG:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '::1', '10.183.201.137', '10.0.2.2']
+else:
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -56,7 +49,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",  # ✅ MUST BE FIRST
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -154,34 +147,21 @@ DEFAULT_FROM_EMAIL = 'noreply@ischool.ng'
 CONTACT_EMAIL = "admin@ischool.ng"
 
 # ============================================
-# FIXED CORS SETTINGS
+# CORS SETTINGS - Production Ready
 # ============================================
 
-# For development, allow all origins
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
 else:
     CORS_ALLOW_ALL_ORIGINS = False
     CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOWED_ORIGINS = [
+        "https://www.ischool.ng",
+        "https://api.ischool.ng",
+        # Add your mobile app's production URL if applicable
+    ]
 
-# Explicit allowed origins (used when DEBUG=False)
-CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng",
-    "https://api.ischool.ng",
-    "http://localhost:3000",
-    "http://localhost:8080",
-    "http://localhost:8081",
-    "http://localhost:19000",
-    "http://localhost:19001",
-    "http://localhost:19002",
-    "http://localhost:19006",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:8081",
-    "http://127.0.0.1:19000",
-]
-
-# Allow all methods
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -191,7 +171,6 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# Allow all headers
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -205,38 +184,31 @@ CORS_ALLOW_HEADERS = [
     'Access-Control-Allow-Origin',
 ]
 
-# Cache preflight requests for 10 minutes
 CORS_PREFLIGHT_MAX_AGE = 600
 
-# Allowed origin regexes (without invalid exp:// patterns)
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.ischool\.ng$",
-    r"^http://localhost:*",
-    r"^http://127\.0\.0\.1:*",
-]
-
 # ============================================
-# FIXED CSRF SETTINGS
+# CSRF SETTINGS - Production Ready
 # ============================================
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://www.ischool.ng",
-    "https://api.ischool.ng",
-    "http://localhost:8080",
-    "http://localhost:8081",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:8081",
-    "http://localhost:19000",
-    "http://localhost:19006",
-]
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:8080",
+        "http://localhost:8081",
+        "http://127.0.0.1:8080",
+        "http://localhost:19000",
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = [
+        "https://www.ischool.ng",
+        "https://api.ischool.ng",
+    ]
 
-# CSRF settings
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'Strict'
 
 # ============================================
-# Logging
+# Logging - Production Ready
 # ============================================
 
 LOGGING = {
@@ -254,11 +226,6 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'corsheaders': {
-            'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': True,
-        },
     },
 }
 
@@ -269,17 +236,13 @@ PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
 OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng/ole-subscription/verify")
 
 PAYSTACK_PLAN_IDS = {
-    # OLE PLAN
     "monthly": "PLN_ky27i039aj6tws7",
-    # OLA PLANS
     "ola_monthly": "PLN_ggznevdmbw5pjb4",
     "ola_yearly": "PLN_r1rhq04xs8yd3uv"
 }
 
 PAYSTACK_PLAN_AMOUNTS = {
-    # Ole plan amounts
     "monthly": 620000,
-    # Ola plans amounts
     "ola_monthly": 610000,
     "ola_yearly": 5200000,
 }
@@ -309,6 +272,6 @@ AUTHENTICATION_BACKENDS = [
 
 PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/payment-callback/"
 
-TERMII_API_KEY = 'TLNanMHpFsZiNWSVImCyQeSxNOCTwpwdTpYBODBDWfbrZTmglrGDXGNiWqETdL'
-
-TERMII_TEST_MODE = False  # Set to True for test mode, False for production
+# Termii SMS Configuration
+TERMII_API_KEY = config('TERMII_API_KEY')
+TERMII_TEST_MODE = config('TERMII_TEST_MODE', default=True, cast=bool)
