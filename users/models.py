@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils.crypto import get_random_string
 from datetime import date
+import random
 
 
 class CustomUserManager(BaseUserManager):
@@ -317,3 +318,25 @@ class OlePaymentVerification(models.Model):
     class Meta:
         verbose_name = "Payment Verification"
         verbose_name_plural = "Payment Verifications"
+
+# Add to your existing models.py
+class PhoneVerification(models.Model):
+    phone_number = models.CharField(max_length=15)
+    code = models.CharField(max_length=6)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = str(random.randint(100000, 999999))
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
+        super().save(*args, **kwargs)
+    
+    def is_expired(self):
+        """Check if the verification code has expired"""
+        return timezone.now() > self.expires_at
+    
+    def __str__(self):
+        return f"{self.phone_number} - {self.code} - {'Verified' if self.is_verified else 'Pending'}"

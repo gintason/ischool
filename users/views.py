@@ -45,15 +45,24 @@ import json
 import random
 import uuid
 import string
+from django.utils import timezone
 from django.conf import settings
 from django.db import IntegrityError  # Make sure this is imported at the top
 from django.core.mail import send_mail
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import PhoneVerification
+from .sms_services import send_sms
 import logging
 import threading
 from django.core.cache import cache
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
 PROCESSED_REFERENCES = set()
 
 logger = logging.getLogger(__name__)
@@ -766,6 +775,7 @@ def log_student_join(request):
     return Response({"attendance_id": log.id})
 
 
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def log_student_leave(request):
@@ -779,3 +789,181 @@ def log_student_leave(request):
         return Response({"detail": "Left time logged."})
     except AttendanceLog.DoesNotExist:
         return Response({"detail": "Attendance not found."}, status=404)
+
+def format_phone_number(phone):
+    """
+    Format phone number to international format (234XXXXXXXXXX)
+    Accepts: 07030673089, 7030673089, +2347030673089, 2347030673089
+    """
+    # Remove all non-numeric characters
+    phone = ''.join(filter(str.isdigit, phone))
+    
+    # Remove leading 0 if present
+    if phone.startswith('0'):
+        phone = phone[1:]
+    
+    # Remove +234 or 234 if already present
+    if phone.startswith('234'):
+        phone = phone[3:]
+    
+    # Add 234 prefix
+    phone = '234' + phone
+    
+    return phone
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_verification_code(request):
+    phone = request.data.get('phone_number')
+    platform = request.data.get('platform', 'ole')
+    
+    if not phone:
+        return Response({'error': 'Phone number is required'}, status=400)
+    
+    # Format phone
+    phone = phone.strip().replace(' ', '')
+    if phone.startswith('0'):
+        phone = phone[1:]
+    if not phone.startswith('234'):
+        phone = '234' + phone
+    
+    # Delete old codes
+    PhoneVerification.objects.filter(phone_number=phone).delete()
+    
+    # Create new code
+    verification = PhoneVerification.objects.create(phone_number=phone)
+    
+    logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
+    print(f"📱 VERIFICATION CODE for {phone}: {verification.code}")
+    
+    # Check if we're in test mode
+    is_test_mode = getattr(settings, 'TERMII_TEST_MODE', False)
+    
+    # Send SMS (handles both test and production modes)
+    sms_sent = send_sms(phone, verification.code)
+    
+    if not sms_sent and not is_test_mode:
+        return Response(
+            {'error': 'Failed to send verification code. Please try again.'}, 
+            status=500
+        )
+    
+    # Return response
+    response_data = {
+        'message': 'Code sent successfully',
+        'expires_in': 600
+    }
+    
+    # Only return the actual code in test mode or DEBUG mode
+    if is_test_mode or settings.DEBUG:
+        response_data['code'] = verification.code
+        response_data['test_mode'] = True
+    
+    return Response(response_data)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_code(request):
+    try:
+        phone = request.data.get('phone_number')
+        code = request.data.get('code')
+        platform = request.data.get('platform', 'ole')
+        
+        print(f"🔍 Verifying - Original Phone: {phone}, Code: {code}")
+        
+        if not phone or not code:
+            return Response({'error': 'Phone number and code are required'}, status=400)
+        
+        # Format phone using the helper function
+        phone = format_phone_number(phone)
+        print(f"🔍 Formatted phone: {phone}")
+        
+        try:
+            verification = PhoneVerification.objects.get(
+                phone_number=phone,
+                code=code,
+                is_verified=False
+            )
+            
+            print(f"🔍 Found record - Expires at: {verification.expires_at}")
+            print(f"🔍 Current time: {timezone.now()}")
+            
+            # Check if expired
+            if verification.is_expired():
+                print(f"❌ Code expired")
+                # Delete expired code
+                verification.delete()
+                return Response({
+                    'error': 'Code has expired. Please request a new code.',
+                    'expired': True
+                }, status=400)
+            
+            # Mark as verified
+            verification.is_verified = True
+            verification.save()
+            
+            print(f"✅ Code verified successfully")
+            
+            return Response({
+                'message': 'Phone number verified successfully',
+                'platform': platform,
+                'verified': True
+            })
+            
+        except PhoneVerification.DoesNotExist:
+            print(f"❌ No valid verification record found for phone: {phone}, code: {code}")
+            return Response({'error': 'Invalid verification code'}, status=400)
+            
+    except Exception as e:
+        print(f"❌ Error in verify_code: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'Server error: {str(e)}'}, status=500)
+    
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_verification_status(request):
+    phone = request.data.get('phone_number')
+    platform = request.data.get('platform', 'ole')
+    
+    if not phone:
+        return Response({'error': 'Phone number is required'}, status=400)
+    
+    # Format phone
+    phone = phone.strip().replace(' ', '')
+    if not phone.startswith('234'):
+        phone = '234' + phone.lstrip('0')
+    
+    try:
+        # Check if there's a verified record for this phone
+        verification = PhoneVerification.objects.filter(
+            phone_number=phone,
+            is_verified=True
+        ).exists()
+        
+        return Response({
+            'verified': verification,
+            'message': 'Phone number already verified' if verification else 'Phone number not verified'
+        })
+            
+    except Exception as e:
+        logger.error(f"Check verification error: {e}")
+        return Response({'verified': False, 'error': str(e)}, status=500)
+@csrf_exempt
+def api_root(request):
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Users API is working',
+        'available_endpoints': [
+            'POST /api/users/phone/send-code/',
+            'POST /api/users/phone/verify-code/',
+            'POST /api/users/phone/check-verification/',
+        ]
+    })

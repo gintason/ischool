@@ -8,6 +8,7 @@ import logging
 import dj_database_url
 from corsheaders.defaults import default_headers
 from corsheaders.defaults import default_methods
+
 # Load .env file
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -15,15 +16,17 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
+# ✅ FIXED ALLOWED_HOSTS - removed invalid entries
 ALLOWED_HOSTS = [
     'ischool-backend.onrender.com',
     "ischool.ng",
     "www.ischool.ng",
     "api.ischool.ng",
-]
-
-CORS_ALLOW_METHODS = list(default_methods) + [
-    'POST',
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "10.183.201.137",  # 👈 Add your computer's IP address
+    "10.0.2.2", 
 ]
 
 # Application definition
@@ -50,7 +53,6 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "elibrary",
     'django_celery_beat',
-    
 ]
 
 MIDDLEWARE = [
@@ -99,7 +101,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.StandardPasswordValidator"},
 ]
 
 # Internationalization
@@ -151,33 +153,92 @@ EMAIL_USE_SSL = True
 DEFAULT_FROM_EMAIL = 'noreply@ischool.ng'
 CONTACT_EMAIL = "admin@ischool.ng"
 
-# CORS settings
+# ============================================
+# FIXED CORS SETTINGS
+# ============================================
+
+# For development, allow all origins
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOW_CREDENTIALS = True
+
+# Explicit allowed origins (used when DEBUG=False)
 CORS_ALLOWED_ORIGINS = [
-    "https://www.ischool.ng",  # Your production frontend
+    "https://www.ischool.ng",
+    "https://api.ischool.ng",
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://localhost:8081",
+    "http://localhost:19000",
+    "http://localhost:19001",
+    "http://localhost:19002",
+    "http://localhost:19006",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:19000",
 ]
 
-CORS_ALLOW_CREDENTIALS = True
+# Allow all methods
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
-CORS_ALLOW_ALL_ORIGINS = False
+# Allow all headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'Access-Control-Allow-Origin',
+]
 
+# Cache preflight requests for 10 minutes
+CORS_PREFLIGHT_MAX_AGE = 600
+
+# Allowed origin regexes (without invalid exp:// patterns)
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.ischool\.ng$",
+    r"^http://localhost:*",
+    r"^http://127\.0\.0\.1:*",
 ]
 
-
+# ============================================
+# FIXED CSRF SETTINGS
+# ============================================
 
 CSRF_TRUSTED_ORIGINS = [
     "https://www.ischool.ng",
     "https://api.ischool.ng",
+    "http://localhost:8080",
+    "http://localhost:8081",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",
+    "http://localhost:19000",
+    "http://localhost:19006",
 ]
 
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    'Authorization',
-    'X-CSRFToken',
-    'Content-Type',
-]
+# CSRF settings
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'Strict'
 
+# ============================================
 # Logging
+# ============================================
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -193,6 +254,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'corsheaders': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': True,
+        },
     },
 }
 
@@ -202,22 +268,18 @@ PAYSTACK_SECRET_KEY = os.getenv('PAYSTACK_LIVE_SECRET_KEY')
 PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
 OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng/ole-subscription/verify")
 
-
 PAYSTACK_PLAN_IDS = {
-    #OLE PLAN, Tetst Mode pls rememember to change to live mode
+    # OLE PLAN
     "monthly": "PLN_ky27i039aj6tws7",
-
-    #OLA PLANS
+    # OLA PLANS
     "ola_monthly": "PLN_ggznevdmbw5pjb4",
     "ola_yearly": "PLN_r1rhq04xs8yd3uv"
 }
 
-
 PAYSTACK_PLAN_AMOUNTS = {
-    #Ole plan amounts
+    # Ole plan amounts
     "monthly": 620000,
-
-    #Ola plans amounts
+    # Ola plans amounts
     "ola_monthly": 610000,
     "ola_yearly": 5200000,
 }
@@ -237,15 +299,16 @@ CELERY_BEAT_SCHEDULE = {
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-#SLOT_PRICE_MONTHLY = 6100, SLOT_PRICE_YEARLY = 52000
-
-# Other constants
+# Slot prices
 SLOT_PRICE_MONTHLY = 610000
 SLOT_PRICE_YEARLY = 5200000
-
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
 PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/payment-callback/"
+
+TERMII_API_KEY = 'TLNanMHpFsZiNWSVImCyQeSxNOCTwpwdTpYBODBDWfbrZTmglrGDXGNiWqETdL'
+
+TERMII_TEST_MODE = False  # Set to True for test mode, False for production

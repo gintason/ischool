@@ -11,12 +11,13 @@ from .views import (UserRegistrationView,
                     StudentResultsView, ParentResultsView, StudentRegistrationView, CustomLoginView,
                     get_student_lesson_detail, OleStudentLessonHistoryView, OleStudentMaterialListView, 
                     RenewSubscriptionAPIView, SubscriptionPlanListAPIView, initialize_subscription_payment, 
-                    verify_payment, log_student_join, log_student_leave)
+                    verify_payment, log_student_join, log_student_leave, check_verification_status)
 # urls.py
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from dj_rest_auth.views import LoginView
+from . import views
 
 
 urlpatterns = [
@@ -75,4 +76,9 @@ urlpatterns = [
     path('log-join/', log_student_join, name='log_student_join'),
     path('log-leave/', log_student_leave, name='log_student_leave'),
     path('auth/token/', LoginView.as_view(), name='rest_login'),  # or dj-rest-auth login
+
+    path('phone/send-code/', views.send_verification_code, name='send-code'),
+    path('phone/verify-code/', views.verify_code, name='verify-code'),
+    path('phone/check-verification/', views.check_verification_status, name='check-verification'),
+    path('', views.api_root, name='api-root'),  # Add this for /api/users/
 ]
