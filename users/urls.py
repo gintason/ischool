@@ -81,4 +81,9 @@ urlpatterns = [
     path('phone/verify-code/', views.verify_code, name='verify-code'),
     path('phone/check-verification/', views.check_verification_status, name='check-verification'),
     path('', views.api_root, name='api-root'),  # Add this for /api/users/
+
+    # Phone Login Logout System
+    path('phone/login/', views.phone_login_or_register, name='phone-login'),
+    path('phone/logout/', views.phone_logout, name='phone-logout'),
+    path('profile/', views.get_user_profile, name='user-profile'),
 ]

@@ -25,10 +25,20 @@ class CustomUserManager(BaseUserManager):
             elif user.registration_group:
                 user.username = self.generate_username_from_group(user.registration_group, role)
             else:
-                # ✅ Use email as username for roles without registration_group (e.g. teacher)
-                user.username = email
+                # ✅ Use phone number based username for phone-auth users
+                if user.phone_number:
+                    user.username = f"phone_{user.phone_number[-8:]}_{get_random_string(4).lower()}"
+                else:
+                    user.username = email
 
-        user.set_password(password or self.make_random_password())
+        # ✅ Fixed: Set password properly without calling non-existent super method
+        if password:
+            user.set_password(password)
+        else:
+            # Generate a random secure password for users without one (e.g., phone-auth)
+            random_password = get_random_string(20)
+            user.set_password(random_password)
+            
         user.save(using=self._db)
 
         # ✅ Decrease slots only if registration_group exists
@@ -54,7 +64,16 @@ class CustomUserManager(BaseUserManager):
         """Generate simple, unique username for ole students."""
         base = email.split('@')[0].replace('.', '').replace('+', '')
         suffix = get_random_string(4).upper()
-        return f"ole_{base}_{suffix}"
+        username = f"ole_{base}_{suffix}"
+        
+        # Ensure uniqueness
+        counter = 1
+        base_username = username
+        while self.model.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+            
+        return username
 
     def generate_username_from_group(self, group, role):
         role_codes = {
@@ -94,11 +113,7 @@ class CustomUserManager(BaseUserManager):
             count = self.model.objects.filter(role=role).count() + 1
             return f"{role_prefix}_{str(count).zfill(4)}"
 
-    def make_random_password(self):
-        # Return a randomly generated password
-        return super().make_random_password()
-    
-
+    # ✅ Removed the broken make_random_password method - using get_random_string instead
 
 
 # Custom User model
@@ -117,6 +132,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=100)
     profile_photo = models.ImageField(upload_to="profile_photos/", null=True, blank=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    
+    # ✅ Phone number field for phone-based authentication
+    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
 
     registration_group = models.ForeignKey(
         "RegistrationGroup",
@@ -153,7 +171,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         if self.role:
             self.role = self.role.lower()
         if not self.username:
-            raise ValueError("Username must be auto-generated before saving.")
+            # ✅ Allow save without username (will be auto-generated)
+            pass
         super().save(*args, **kwargs)
 
 

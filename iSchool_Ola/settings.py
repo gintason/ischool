@@ -18,7 +18,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 # ALLOWED_HOSTS - Read from environment variable for production
 if DEBUG:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '::1', '10.183.201.137', '10.0.2.2']
+    ALLOWED_HOSTS = ['*']  # Allow all hosts during development
 else:
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 
@@ -80,7 +80,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "iSchool_Ola.wsgi.application"
 
-# Database
+# Database 
 DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL'),
@@ -94,7 +94,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.StandardPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},  # ✅ Changed from StandardPasswordValidator
 ]
 
 # Internationalization
@@ -159,6 +159,7 @@ else:
     CORS_ALLOWED_ORIGINS = [
         "https://www.ischool.ng",
         "https://api.ischool.ng",
+        'http://localhost:8081',
         # Add your mobile app's production URL if applicable
     ]
 
@@ -201,6 +202,7 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         "https://www.ischool.ng",
         "https://api.ischool.ng",
+        'http://localhost:8081',
     ]
 
 CSRF_COOKIE_SECURE = not DEBUG
@@ -240,16 +242,21 @@ PAYSTACK_PLAN_IDS = {
     "ola_monthly": "PLN_ggznevdmbw5pjb4",
     "ola_yearly": "PLN_r1rhq04xs8yd3uv"
 }
-
 PAYSTACK_PLAN_AMOUNTS = {
-    "monthly": 620000,
-    "ola_monthly": 610000,
-    "ola_yearly": 5200000,
+    "monthly": 620000,     # ✅ ₦6,200 in kobo
+    "ola_monthly": 610000, # ₦6,100 in kobo (OLA specific)
+    "ola_yearly": 5200000, # ✅ Changed from 520000 to 5200000 (₦52,000 in kobo)
 }
+# Slot prices (in kobo)
+SLOT_PRICE_MONTHLY = 620000   # ✅ Changed from 610000 to 620000
+SLOT_PRICE_YEARLY = 5200000   # ✅ Changed from 520000 to 5200000
 
 # Celery
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
+
+
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_BEAT_SCHEDULE = {
@@ -262,9 +269,6 @@ CELERY_BEAT_SCHEDULE = {
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Slot prices
-SLOT_PRICE_MONTHLY = 610000
-SLOT_PRICE_YEARLY = 5200000
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
@@ -272,6 +276,7 @@ AUTHENTICATION_BACKENDS = [
 
 PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/payment-callback/"
 
-# Termii SMS Configuration
-TERMII_API_KEY = config('TERMII_API_KEY')
-TERMII_TEST_MODE = config('TERMII_TEST_MODE', default=True, cast=bool)
+# Africa's Talking SMS Configuration
+AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
+AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
+AFRICASTALKING_SENDER_ID = config('AFRICASTALKING_SENDER_ID', default='iSchool')

@@ -62,6 +62,10 @@ import threading
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 PROCESSED_REFERENCES = set()
 
@@ -812,58 +816,69 @@ def format_phone_number(phone):
     return phone
 
 
-
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def send_verification_code(request):
-    phone = request.data.get('phone_number')
-    platform = request.data.get('platform', 'ole')
-    
-    if not phone:
-        return Response({'error': 'Phone number is required'}, status=400)
-    
-    # Format phone
-    phone = phone.strip().replace(' ', '')
-    if phone.startswith('0'):
-        phone = phone[1:]
-    if not phone.startswith('234'):
-        phone = '234' + phone
-    
-    # Delete old codes
-    PhoneVerification.objects.filter(phone_number=phone).delete()
-    
-    # Create new code
-    verification = PhoneVerification.objects.create(phone_number=phone)
-    
-    logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
-    print(f"📱 VERIFICATION CODE for {phone}: {verification.code}")
-    
-    # Check if we're in test mode
-    is_test_mode = getattr(settings, 'TERMII_TEST_MODE', False)
-    
-    # Send SMS (handles both test and production modes)
-    sms_sent = send_sms(phone, verification.code)
-    
-    if not sms_sent and not is_test_mode:
+    try:
+        phone = request.data.get('phone_number')
+        platform = request.data.get('platform', 'ole')
+        
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+        
+        # Format phone
+        phone = phone.strip().replace(' ', '')
+        if phone.startswith('0'):
+            phone = phone[1:]
+        if not phone.startswith('234'):
+            phone = '234' + phone
+        
+        # Delete old codes
+        PhoneVerification.objects.filter(phone_number=phone).delete()
+        
+        # Create new code
+        verification = PhoneVerification.objects.create(phone_number=phone)
+        
+        logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
+        print(f"📱 VERIFICATION CODE for {phone}: {verification.code}")
+        
+        # Check if we're in sandbox mode
+        is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
+        
+        # Send SMS using the auto-fallback service
+        from .sms_services import send_sms_auto_fallback
+        sms_sent = send_sms_auto_fallback(phone, verification.code)
+        
+        if not sms_sent and not is_sandbox:
+            logger.error(f"Failed to send SMS to {phone}")
+            # Still return success in DEBUG mode
+            if not settings.DEBUG:
+                return Response(
+                    {'error': 'Failed to send verification code. Please try again.'}, 
+                    status=500
+                )
+        
+        # Build response data
+        response_data = {
+            'message': 'Code sent successfully',
+            'expires_in': 600
+        }
+        
+        # Only return the actual code in sandbox mode or DEBUG mode
+        if is_sandbox or settings.DEBUG:
+            response_data['code'] = verification.code
+            response_data['test_mode'] = True
+        
+        return Response(response_data, status=200)  # ✅ Explicit status
+        
+    except Exception as e:
+        logger.error(f"Error in send_verification_code: {str(e)}", exc_info=True)
+        print(f"❌ Error: {str(e)}")
         return Response(
-            {'error': 'Failed to send verification code. Please try again.'}, 
+            {'error': f'Server error: {str(e)}'}, 
             status=500
         )
-    
-    # Return response
-    response_data = {
-        'message': 'Code sent successfully',
-        'expires_in': 600
-    }
-    
-    # Only return the actual code in test mode or DEBUG mode
-    if is_test_mode or settings.DEBUG:
-        response_data['code'] = verification.code
-        response_data['test_mode'] = True
-    
-    return Response(response_data)
-
 
 @csrf_exempt
 @api_view(['POST'])
@@ -967,3 +982,190 @@ def api_root(request):
             'POST /api/users/phone/check-verification/',
         ]
     })
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def phone_login_or_register(request):
+    """
+    After phone verification, either:
+    1. Login existing user by phone number
+    2. Create new user and login
+    """
+    try:
+        phone = request.data.get('phone_number')
+        platform = request.data.get('platform', 'ole')
+        
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+        
+        # Format phone
+        phone = format_phone_number(phone)
+        
+        logger.info(f"Phone login/register attempt for: {phone}")
+        
+        # Check if verification exists and is verified
+        try:
+            verification = PhoneVerification.objects.filter(
+                phone_number=phone,
+                is_verified=True
+            ).latest('created_at')
+        except PhoneVerification.DoesNotExist:
+            return Response({
+                'error': 'Phone number not verified. Please verify first.',
+                'verified': False
+            }, status=400)
+        
+        User = get_user_model()
+        
+        # ✅ Check if user already exists with this phone
+        user = User.objects.filter(phone_number=phone).first()
+        
+        if user:
+            # ✅ EXISTING USER - just login
+            is_new_user = False
+            logger.info(f"Existing user found: {user.email}")
+            
+            # Update full_name if it was auto-generated
+            if user.full_name.startswith('Student '):
+                user.full_name = f"Student {phone[-4:]}"
+                user.save()
+        else:
+            # ✅ NEW USER - create account
+            is_new_user = True
+            random_suffix = get_random_string(6).lower()
+            email = f"phone_{phone[-8:]}_{random_suffix}@ischool.ng"
+            username = f"ole_{phone[-6:]}_{random_suffix[:4]}"
+            
+            # Ensure unique username
+            counter = 1
+            base_username = username
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            # Ensure unique email
+            counter = 1
+            base_email = email
+            while User.objects.filter(email=email).exists():
+                email = f"phone_{phone[-8:]}_{random_suffix}_{counter}@ischool.ng"
+                counter += 1
+            
+            # Create user
+            user = User(
+                email=email,
+                phone_number=phone,
+                username=username,
+                full_name=f"Student {phone[-4:]}",
+                role='ole_student' if platform == 'ole' else 'student',
+                is_active=True,
+            )
+            
+            # Set an unusable password (phone auth doesn't need passwords)
+            user.set_unusable_password()
+            
+            try:
+                user.save()
+                logger.info(f"New user created: {user.email} with phone {phone}")
+            except Exception as e:
+                logger.error(f"Failed to save user: {str(e)}")
+                raise
+            
+            # Create OLE profile if applicable
+            if platform == 'ole':
+                try:
+                    OleStudentProfile.objects.get_or_create(user=user)
+                except Exception as e:
+                    logger.error(f"Failed to create OLE profile: {e}")
+        
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        
+        response_data = {
+            'message': 'Login successful',
+            'user': {
+                'id': user.id,
+                'full_name': user.full_name,
+                'phone_number': user.phone_number,
+                'email': user.email,
+                'username': user.username,
+                'role': user.role,
+            },
+            'tokens': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            },
+            'is_new_user': is_new_user
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Phone login/register error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Server error: {str(e)}'}, 
+            status=500
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def phone_logout(request):
+    """
+    Logout by blacklisting refresh token
+    """
+    try:
+        refresh_token = request.data.get('refresh_token')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        
+        return Response({'message': 'Logged out successfully'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_profile(request):
+    """
+    Get current user's profile including phone number
+    """
+    user = request.user
+    
+    # Get additional profile data based on role
+    profile_data = {
+        'id': user.id,
+        'full_name': user.full_name,
+        'phone_number': user.phone_number,
+        'email': user.email,
+        'username': user.username,
+        'role': user.role,
+    }
+    
+    # Add OLE-specific data
+    if user.role == 'ole_student':
+        try:
+            profile = user.ole_profile
+            profile_data['class_level'] = profile.class_level.name if profile.class_level else None
+            profile_data['subjects'] = list(profile.subjects.values_list('name', flat=True))
+        except OleStudentProfile.DoesNotExist:
+            pass
+        
+        # Add subscription status
+        try:
+            subscription = user.ole_subscription
+            profile_data['subscription'] = {
+                'plan_type': subscription.plan_type,
+                'is_active': subscription.is_active(),
+                'expires_in_days': (subscription.end_date.date() - timezone.now().date()).days
+            }
+        except OleStudentSubscription.DoesNotExist:
+            profile_data['subscription'] = None
+    
+    return Response(profile_data)
