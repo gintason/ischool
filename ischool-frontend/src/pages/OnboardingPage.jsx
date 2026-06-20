@@ -48,7 +48,7 @@ const OnboardingPage = () => {
             <div className="logo-container">
               <div className="logo-ring">
                 <img 
-                  src="/assets/images/logong.png" 
+                  src="/assets/logo1.png" 
                   alt="iSchool Logo" 
                   className="logo-img"
                 />
