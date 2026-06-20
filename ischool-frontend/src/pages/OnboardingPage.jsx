@@ -133,9 +133,8 @@ const OnboardingPage = () => {
 
           {/* Footer */}
           <div className="footer-section animate-fade-in delay-5">
-            <p className="footer-text">v1.0.0 • Developed By AiTrend</p>
             <p className="footer-copyright">
-              &copy; {new Date().getFullYear()} iSchool.ng. All Rights Reserved.
+              &copy; {new Date().getFullYear()} iSchool.ng. All Rights Reserved. Developed By AiTrend
             </p>
           </div>
 
