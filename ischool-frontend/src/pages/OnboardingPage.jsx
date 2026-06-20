@@ -45,21 +45,13 @@ const OnboardingPage = () => {
           
           {/* Logo & Header Section */}
           <div className="header-section animate-slide-down">
-            <div className="logo-container">
-              <div className="logo-ring">
-                <img 
-                  src="/assets/logo1.png" 
-                  alt="iSchool Logo" 
-                  className="logo-img"
-                />
-              </div>
             </div>
             
             <div className="slogan-section animate-fade-in delay-1">
-              <p className="slogan-sub">Empowering Students with</p>
               <h1 className="slogan-main">
-                Digital <span className="text-gradient">Learning</span> Solutions
+                Welcome to <span className="text-gradient">iSchool</span>.ng
               </h1>
+              <p className="slogan-sub">Empowering Students with Digital Learning Solutions</p>
             </div>
 
             <div className="divider-line animate-scale-in delay-2"></div>
@@ -150,7 +142,6 @@ const OnboardingPage = () => {
 
         </div>
       </div>
-    </div>
   );
 };
 
