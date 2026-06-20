@@ -43,9 +43,8 @@ const OnboardingPage = () => {
       <div className="onboarding-container">
         <div className="content-wrapper">
           
-          {/* Logo & Header Section */}
+          {/* Header Section */}
           <div className="header-section animate-slide-down">
-            </div>
             
             <div className="slogan-section animate-fade-in delay-1">
               <h1 className="slogan-main">
@@ -142,6 +141,7 @@ const OnboardingPage = () => {
 
         </div>
       </div>
+    </div>
   );
 };
 
