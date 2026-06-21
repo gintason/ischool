@@ -43,19 +43,8 @@ def format_phone_for_sms(phone_number):
     return '+' + phone_number
 
 def send_sms(phone_number, code):
-    """
-    Send SMS using Africa's Talking API
-    
-    Args:
-        phone_number: Phone number in local or international format
-        code: Verification code to send
-    
-    Returns:
-        bool: True if successful, False otherwise
-    """
     formatted_phone = format_phone_for_sms(phone_number)
     
-    # Check if we're in test/sandbox mode
     is_test_mode = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
     
     if is_test_mode:
@@ -71,22 +60,30 @@ def send_sms(phone_number, code):
     try:
         message = f"Your iSchool verification code is {code}. Valid for 10 minutes, one-time use only."
         
+        # Use sender_id only if it's not empty
+        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
+        
         print(f"\n📤 Sending SMS via Africa's Talking...")
         print(f"To: {formatted_phone}")
-        print(f"Sender: {settings.AFRICASTALKING_SENDER_ID}")
+        print(f"Sender: {sender_id or 'Default'}")
         print(f"Message: {message}")
         
-        # Send SMS
-        response = sms.send(
-            message=message,
-            recipients=[formatted_phone],
-            sender_id=settings.AFRICASTALKING_SENDER_ID
-        )
+        # Send SMS - pass sender_id only if it has a value
+        if sender_id:
+            response = sms.send(
+                message=message,
+                recipients=[formatted_phone],
+                sender_id=sender_id
+            )
+        else:
+            response = sms.send(
+                message=message,
+                recipients=[formatted_phone]
+            )
         
         print(f"Response: {response}")
         logger.info(f"SMS sent to {formatted_phone}: {response}")
         
-        # Check response status
         if response and isinstance(response, dict):
             recipients = response.get('SMSMessageData', {}).get('Recipients', [])
             if recipients:
@@ -95,38 +92,41 @@ def send_sms(phone_number, code):
                 if status == 'Success':
                     message_id = recipient.get('messageId')
                     print(f"✅ SMS sent successfully! Message ID: {message_id}")
-                    logger.info(f"SMS delivered to {formatted_phone}, MessageId: {message_id}")
                     return True
                 else:
                     print(f"❌ SMS failed with status: {status}")
-                    logger.error(f"SMS failed for {formatted_phone}: {recipient}")
                     return False
         
-        print(f"⚠️ Unexpected response format: {response}")
         return False
             
     except Exception as e:
         print(f"❌ SMS Error: {e}")
-        logger.error(f"SMS sending failed for {formatted_phone}: {str(e)}")
         return False
+
 
 def send_sms_auto_fallback(phone_number, code):
     formatted_phone = format_phone_for_sms(phone_number)
     
-    # Check if sandbox mode
     if getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox':
         return send_sms(phone_number, code)
     
     try:
         message = f"Your iSchool verification code is {code}. Valid for 10 minutes."
+        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
         
         print(f"📤 Sending SMS to {formatted_phone}")
         
-        response = sms.send(
-            message=message,
-            recipients=[formatted_phone],
-            sender_id=settings.AFRICASTALKING_SENDER_ID
-        )
+        if sender_id:
+            response = sms.send(
+                message=message,
+                recipients=[formatted_phone],
+                sender_id=sender_id
+            )
+        else:
+            response = sms.send(
+                message=message,
+                recipients=[formatted_phone]
+            )
         
         print(f"📨 API Response: {response}")
         
@@ -135,14 +135,10 @@ def send_sms_auto_fallback(phone_number, code):
             if recipients:
                 status = recipients[0].get('status')
                 if status == 'Success':
-                    print(f"✅ SMS sent successfully!")
                     return True
-                else:
-                    print(f"❌ SMS failed: {recipients[0]}")
         
         return False
         
     except Exception as e:
         print(f"❌ SMS Error: {e}")
-        logger.error(f"SMS auto-fallback failed: {str(e)}")
-        return False  # ✅ Always return a boolean
+        return False
