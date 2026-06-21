@@ -17,13 +17,13 @@ python-decouple = "*"
 openai = "*"
 python-dotenv = "*"
 django-q = "*"
-celery = "*"
 django-celery-beat = "*"
-redis = "*"
 reportlab = "*"
 gunicorn = "*"
 django-filter = "*"
 psycopg = {extras = ["binary"], version = "*"}
+celery = "*"
+redis = "*"
 
 [dev-packages]
 

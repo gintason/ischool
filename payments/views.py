@@ -108,13 +108,12 @@ def initiate_payment(request):
     if billing_cycle not in ["monthly", "yearly"]:
         billing_cycle = "monthly"
 
-    # Calculate amount
+    # Calculate amount - slot_price is already in kobo from settings
     slot_price = settings.SLOT_PRICE_MONTHLY if billing_cycle == "monthly" else settings.SLOT_PRICE_YEARLY
-    amount = num_slots * slot_price
-    amount_in_kobo = int(amount * 100)
+    amount_in_kobo = num_slots * slot_price  # ✅ Already in kobo, no need to multiply by 100
 
     base_callback_url = settings.PAYMENT_CALLBACK_URL
-     # Ensure the base URL has a trailing slash for consistency
+    # Ensure the base URL has a trailing slash for consistency
     if not base_callback_url.endswith('/'):
         base_callback_url += '/'
         
@@ -124,7 +123,6 @@ def initiate_payment(request):
         "reference": tx_ref,
         "amount": amount_in_kobo,
         "currency": "NGN",
-        # ✅ Use the consistent callback URL with parameters
         "callback_url": callback_url_with_params,
         "email": data["email"],
         "metadata": {
@@ -172,7 +170,6 @@ def initiate_payment(request):
     except Exception as e:
         logger.error(f"Payment initiation error: {e}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 @api_view(["POST"])
