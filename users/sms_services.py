@@ -52,15 +52,12 @@ def send_sms(phone_number, code):
         print(f"📱 AFRICA'S TALKING SANDBOX MODE")
         print(f"To: {formatted_phone}")
         print(f"Verification Code: {code}")
-        print(f"Message: Your iSchool verification code is {code}. Valid for 10 minutes, one-time use only.")
         print(f"{'='*60}\n")
-        logger.info(f"TEST MODE: SMS to {formatted_phone} with code: {code}")
         return True
     
     try:
         message = f"Your iSchool verification code is {code}. Valid for 10 minutes, one-time use only."
         
-        # Use sender_id only if it's not empty
         sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
         
         print(f"\n📤 Sending SMS via Africa's Talking...")
@@ -68,18 +65,17 @@ def send_sms(phone_number, code):
         print(f"Sender: {sender_id or 'Default'}")
         print(f"Message: {message}")
         
-        # Send SMS - pass sender_id only if it has a value
+        # Use enqueue parameter to bypass DND
+        options = {
+            "message": message,
+            "recipients": [formatted_phone],
+            "enqueue": True  # ✅ This helps bypass DND for transactional messages
+        }
+        
         if sender_id:
-            response = sms.send(
-                message=message,
-                recipients=[formatted_phone],
-                sender_id=sender_id
-            )
-        else:
-            response = sms.send(
-                message=message,
-                recipients=[formatted_phone]
-            )
+            options["sender_id"] = sender_id
+        
+        response = sms.send(**options)
         
         print(f"Response: {response}")
         logger.info(f"SMS sent to {formatted_phone}: {response}")
@@ -94,7 +90,7 @@ def send_sms(phone_number, code):
                     print(f"✅ SMS sent successfully! Message ID: {message_id}")
                     return True
                 else:
-                    print(f"❌ SMS failed with status: {status}")
+                    print(f"❌ SMS failed: {status} (code: {recipient.get('statusCode')})")
                     return False
         
         return False
@@ -102,7 +98,7 @@ def send_sms(phone_number, code):
     except Exception as e:
         print(f"❌ SMS Error: {e}")
         return False
-
+    
 
 def send_sms_auto_fallback(phone_number, code):
     formatted_phone = format_phone_for_sms(phone_number)
@@ -116,17 +112,16 @@ def send_sms_auto_fallback(phone_number, code):
         
         print(f"📤 Sending SMS to {formatted_phone}")
         
+        options = {
+            "message": message,
+            "recipients": [formatted_phone],
+            "enqueue": True
+        }
+        
         if sender_id:
-            response = sms.send(
-                message=message,
-                recipients=[formatted_phone],
-                sender_id=sender_id
-            )
-        else:
-            response = sms.send(
-                message=message,
-                recipients=[formatted_phone]
-            )
+            options["sender_id"] = sender_id
+        
+        response = sms.send(**options)
         
         print(f"📨 API Response: {response}")
         
