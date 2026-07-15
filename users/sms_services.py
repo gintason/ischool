@@ -16,34 +16,42 @@ sms = africastalking.SMS
 
 def format_phone_for_sms(phone_number):
     """
-    Format phone number for Africa's Talking (international format)
-    Input: 07030673089 or 2347030673089
-    Output: +2347030673089
+    Normalise a Nigerian number to E.164 (+234XXXXXXXXXX).
+
+    A valid Nigerian mobile is the country code 234 followed by a 10-digit
+    subscriber number that starts with a 7/8/9 (e.g. 803..., 703..., 913...).
+    Locally people write it as 0803... (11 digits). This strips spaces, dashes,
+    and any leading 0 / +234 / 234, then validates the result — returning None
+    for anything that isn't a real 10-digit subscriber number, so we never hand
+    Africa's Talking an InvalidPhoneNumber.
     """
-    # Remove any whitespace
-    phone_number = phone_number.strip()
-    
-    # If starts with '0' (local format)
-    if phone_number.startswith('0') and len(phone_number) == 11:
-        return '+234' + phone_number[1:]
-    
-    # If starts with '234'
-    if phone_number.startswith('234') and len(phone_number) >= 13:
-        return '+' + phone_number
-    
-    # If already has '+'
-    if phone_number.startswith('+'):
-        return phone_number
-    
-    # If just the number without country code (10 digits)
-    if len(phone_number) == 10:
-        return '+234' + phone_number
-    
-    # Default: just add '+'
-    return '+' + phone_number
+    if not phone_number:
+        return None
+
+    # Keep digits only (drops spaces, dashes, parentheses, leading +).
+    digits = "".join(ch for ch in str(phone_number) if ch.isdigit())
+
+    # Peel off whichever country/trunk prefix is present, leaving 10 subscriber digits.
+    if digits.startswith("234") and len(digits) == 13:
+        subscriber = digits[3:]
+    elif digits.startswith("0") and len(digits) == 11:
+        subscriber = digits[1:]
+    elif len(digits) == 10:
+        subscriber = digits
+    else:
+        return None  # not a recognisable NG mobile
+
+    # Nigerian mobile subscriber numbers start 7, 8, or 9.
+    if len(subscriber) != 10 or subscriber[0] not in "789":
+        return None
+
+    return "+234" + subscriber
 
 def send_sms(phone_number, code):
     formatted_phone = format_phone_for_sms(phone_number)
+    if not formatted_phone:
+        logger.error("Rejecting invalid phone number before send: %r", phone_number)
+        return False
     
     is_test_mode = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
     
@@ -105,6 +113,9 @@ def send_sms(phone_number, code):
 
 def send_sms_auto_fallback(phone_number, code):
     formatted_phone = format_phone_for_sms(phone_number)
+    if not formatted_phone:
+        logger.error("Rejecting invalid phone number before send: %r", phone_number)
+        return False
     
     if getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox':
         return send_sms(phone_number, code)

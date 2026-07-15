@@ -817,24 +817,15 @@ def log_student_leave(request):
 
 def format_phone_number(phone):
     """
-    Format phone number to international format (234XXXXXXXXXX)
-    Accepts: 07030673089, 7030673089, +2347030673089, 2347030673089
+    Canonical NG number as 234XXXXXXXXXX (no leading +), or None if invalid.
+
+    Delegates to the single validator in sms_services so the send and verify
+    paths can never disagree about what a number normalises to — a mismatch
+    there silently breaks OTP verification.
     """
-    # Remove all non-numeric characters
-    phone = ''.join(filter(str.isdigit, phone))
-    
-    # Remove leading 0 if present
-    if phone.startswith('0'):
-        phone = phone[1:]
-    
-    # Remove +234 or 234 if already present
-    if phone.startswith('234'):
-        phone = phone[3:]
-    
-    # Add 234 prefix
-    phone = '234' + phone
-    
-    return phone
+    from .sms_services import format_phone_for_sms
+    formatted = format_phone_for_sms(phone)
+    return formatted.lstrip('+') if formatted else None
 
 
 @csrf_exempt
@@ -847,14 +838,20 @@ def send_verification_code(request):
         
         if not phone:
             return Response({'error': 'Phone number is required'}, status=400)
-        
-        # Format phone
-        phone = phone.strip().replace(' ', '')
-        if phone.startswith('0'):
-            phone = phone[1:]
-        if not phone.startswith('234'):
-            phone = '234' + phone
-        
+
+        # Canonicalise to E.164 with the same validator the SMS layer uses, so
+        # the stored number and the sent number always agree — and reject
+        # obviously invalid numbers before spending an SMS on them.
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(phone)
+        if not formatted:
+            return Response(
+                {'error': 'Please enter a valid Nigerian phone number, e.g. 08031234567.'},
+                status=400,
+            )
+        # Store without the leading '+' to match the existing lookup format (234...).
+        phone = formatted.lstrip('+')
+
         # Delete old codes
         PhoneVerification.objects.filter(phone_number=phone).delete()
         
@@ -915,9 +912,10 @@ def verify_code(request):
         if not phone or not code:
             return Response({'error': 'Phone number and code are required'}, status=400)
         
-        # Format phone using the helper function
+        # Format phone using the shared validator.
         phone = format_phone_number(phone)
-        print(f"🔍 Formatted phone: {phone}")
+        if not phone:
+            return Response({'error': 'Please enter a valid Nigerian phone number.'}, status=400)
         
         try:
             verification = PhoneVerification.objects.get(
