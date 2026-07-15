@@ -122,9 +122,6 @@ export default function PrivacyPolicy() {
         </div>
 
         {/* Footer */}
-        <div className="mt-12 text-center text-gray-500 text-sm">
-          © {new Date().getFullYear()} iSchool Mobile. All Rights Reserved.
-        </div>
       </div>
     </div>
   );

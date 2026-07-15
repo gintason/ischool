@@ -32,7 +32,27 @@ import threading
 
 from django.http import HttpResponseRedirect  # <-- Add this import
 from django.views.decorators.csrf import csrf_exempt
-PROCESSED_REFERENCES = set()
+# Idempotency is backed by the database, not an in-memory set. A module-level
+# set is per-process and per-restart, so on multi-worker hosts (Render/gunicorn)
+# the same payment webhook could be processed more than once — double-crediting
+# subscriptions or double-registering students. OlePaymentVerification has a
+# unique `reference`, so an atomic get_or_create is the real guard.
+from users.models import OlePaymentVerification
+from django.db import IntegrityError, transaction
+
+
+def _claim_reference(reference):
+    """
+    Return True if this reference is seen for the FIRST time (caller should
+    process it), False if it was already processed (caller should skip).
+    Atomic: the unique constraint makes concurrent duplicates safe.
+    """
+    try:
+        with transaction.atomic():
+            OlePaymentVerification.objects.create(reference=reference)
+        return True
+    except IntegrityError:
+        return False
 
 
 pwo = PasswordGenerator()
@@ -407,12 +427,10 @@ def payment_callback(request):
                 logger.error("No reference in webhook payload")
                 return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # ✅ Idempotency check
-            if reference in PROCESSED_REFERENCES:
+            # ✅ Durable, atomic idempotency check
+            if not _claim_reference(reference):
                 logger.info("Duplicate webhook for reference %s ignored", reference)
                 return JsonResponse({"status": "ignored", "message": "Payment already processed"}, status=status.HTTP_200_OK)
-
-            PROCESSED_REFERENCES.add(reference)
 
             headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
             url = f"https://api.paystack.co/transaction/verify/{reference}"
@@ -491,8 +509,8 @@ def payment_callback(request):
         if not reference:
             return JsonResponse({"error": "No reference found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Idempotency check for GET redirect
-        if reference in PROCESSED_REFERENCES:
+        # ✅ Durable, atomic idempotency check for GET redirect
+        if not _claim_reference(reference):
             logger.info("Duplicate GET callback for reference %s ignored", reference)
             redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=duplicate"
             html_content = f"""
@@ -510,8 +528,6 @@ def payment_callback(request):
             </html>
             """
             return HttpResponse(html_content, content_type="text/html")
-
-        PROCESSED_REFERENCES.add(reference)
 
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
         url = f"https://api.paystack.co/transaction/verify/{reference}"

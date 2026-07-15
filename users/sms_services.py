@@ -90,13 +90,16 @@ def send_sms(phone_number, code):
                     print(f"✅ SMS sent successfully! Message ID: {message_id}")
                     return True
                 else:
-                    print(f"❌ SMS failed: {status} (code: {recipient.get('statusCode')})")
+                    reason = f"{status} (code: {recipient.get('statusCode')})"
+                    logger.error("SMS rejected by Africa's Talking for %s: %s", formatted_phone, reason)
                     return False
-        
+            logger.error("SMS: no recipients in AT response for %s: %s", formatted_phone, response)
         return False
-            
+
     except Exception as e:
-        print(f"❌ SMS Error: {e}")
+        # Common causes: exhausted AT credit, unregistered/!approved sender ID,
+        # invalid API key, or account still in sandbox. Surface it in logs.
+        logger.error("SMS send failed for %s: %s", formatted_phone, e, exc_info=True)
         return False
     
 

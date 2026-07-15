@@ -67,7 +67,6 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-PROCESSED_REFERENCES = set()
 
 logger = logging.getLogger(__name__)
 
@@ -280,11 +279,21 @@ class OleStudentRegistrationView(APIView):
 
         # ✅ DO NOT create user here anymore — let payment verification handle it
 
+        # OLE currently offers the monthly plan only. plan_type is captured for
+        # future use but the plan/amount are resolved from the monthly config.
         plan_id = settings.PAYSTACK_PLAN_IDS.get("monthly")
         amount = settings.PAYSTACK_PLAN_AMOUNTS.get("monthly")
 
         if not plan_id or not amount:
-            return Response({"error": "Invalid plan type selected."}, status=400)
+            logger.error(
+                "OLE plan misconfigured: plan_id=%r amount=%r. Check "
+                "PAYSTACK_PLAN_IDS/PAYSTACK_PLAN_AMOUNTS in settings.",
+                plan_id, amount,
+            )
+            return Response(
+                {"error": "Subscription plan is not configured. Please contact support."},
+                status=500,
+            )
 
         # ✅ Decide callback URL
         is_mobile = request.data.get("is_mobile", False)
@@ -339,12 +348,24 @@ class OleStudentRegistrationView(APIView):
             )
             return Response({"authorization_url": result["data"]["authorization_url"]}, status=200)
 
+        paystack_message = result.get("message", "Unknown error")
+        # "Plan not found" here means the configured PAYSTACK_PLAN_IDS['monthly']
+        # does not exist in the Paystack account tied to the current secret key
+        # (usually a test-vs-live key/plan mismatch, or a deleted plan).
+        logger.error(
+            "Paystack init failed for %s. plan_id=%s message=%r",
+            email, plan_id, paystack_message,
+        )
         AdminActionLog.objects.create(
             action_type="error",
             email=email,
-            details=f"Paystack init failed: {result.get('message', 'Unknown error')}"
+            details=f"Paystack init failed (plan_id={plan_id}): {paystack_message}"
         )
-        return Response({"error": result.get("message", "Payment initialization failed.")}, status=400)
+        user_message = (
+            "We could not start your payment. Please try again shortly, or "
+            "contact support if this continues."
+        )
+        return Response({"error": user_message, "gateway_message": paystack_message}, status=400)
 
 
 
