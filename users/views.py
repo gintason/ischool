@@ -682,10 +682,15 @@ class OleStudentMaterialListView(APIView):
         if user.role != "ole_student":
             return Response({"error": "Unauthorized"}, status=403)
 
-        materials = OleMaterial.objects.filter(
-            class_level=user.ole_class_level,
-            subject__in=user.ole_subjects.all()
-        ).order_by("-uploaded_at")
+        materials = (
+            OleMaterial.objects
+            .filter(
+                class_level=user.ole_class_level,
+                subject__in=user.ole_subjects.all(),
+            )
+            .select_related("subject", "class_level")  # serializer renders both
+            .order_by("-uploaded_at")
+        )
 
         serializer = OleMaterialSerializer(materials, many=True)
         return Response(serializer.data)

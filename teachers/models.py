@@ -61,6 +61,11 @@ class OleTopic(models.Model):
 
     class Meta:
         unique_together = ('subject', 'class_level', 'title')
+        indexes = [
+            # The "subjects for a class level" lookup (registration hot path)
+            # filters OleTopic by class_level then reads subject_id.
+            models.Index(fields=["class_level", "subject"], name="oletopic_level_subject_idx"),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.subject.name} - {self.class_level.name})"

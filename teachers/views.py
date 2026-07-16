@@ -344,7 +344,11 @@ class LiveClassSessionDetailView(RetrieveAPIView):
 class LessonPlanListView(generics.ListAPIView):
     serializer_class = OleLessonPlanSerializer
     permission_classes = [IsAuthenticated]
-    queryset = OleLessonPlan.objects.all()
+    # Serializer walks topic -> class_level and topic -> subject; pull them in
+    # one query instead of two extra per row.
+    queryset = OleLessonPlan.objects.select_related(
+        "topic", "topic__class_level", "topic__subject"
+    ).all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['subject', 'class_level']
 

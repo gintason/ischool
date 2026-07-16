@@ -164,6 +164,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     objects = CustomUserManager()
 
+    class Meta:
+        indexes = [
+            # `role` is filtered on nearly every role-scoped query and permission
+            # check; without an index those become full table scans as the user
+            # count grows.
+            models.Index(fields=["role"], name="user_role_idx"),
+            # subscription sweeps / "is this user still active" checks.
+            models.Index(fields=["subscription_expires_on"], name="user_sub_expires_idx"),
+            # counting/listing users within a registration group.
+            models.Index(fields=["registration_group"], name="user_reg_group_idx"),
+        ]
+
     def __str__(self):
         return f"{self.full_name} ({self.username})"
 
