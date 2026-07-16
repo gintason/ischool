@@ -56,11 +56,9 @@ def send_sms(phone_number, code):
     is_test_mode = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
     
     if is_test_mode:
-        print(f"\n{'='*60}")
-        print(f"📱 AFRICA'S TALKING SANDBOX MODE")
-        print(f"To: {formatted_phone}")
-        print(f"Verification Code: {code}")
-        print(f"{'='*60}\n")
+        # Sandbox never delivers real SMS. Log at debug so the code is visible in
+        # local dev but not in production logs (which run at INFO+).
+        logger.debug("SANDBOX SMS to %s: code %s", formatted_phone, code)
         return True
     
     try:
@@ -68,10 +66,10 @@ def send_sms(phone_number, code):
         
         sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
         
-        print(f"\n📤 Sending SMS via Africa's Talking...")
-        print(f"To: {formatted_phone}")
-        print(f"Sender: {sender_id or 'Default'}")
-        print(f"Message: {message}")
+        logger.info("Sending SMS via Africa's Talking to %s", formatted_phone)
+
+
+
         
         # Use enqueue parameter to bypass DND
         options = {
@@ -85,7 +83,7 @@ def send_sms(phone_number, code):
         
         response = sms.send(**options)
         
-        print(f"Response: {response}")
+        logger.debug("AT response received")
         logger.info(f"SMS sent to {formatted_phone}: {response}")
         
         if response and isinstance(response, dict):
@@ -95,7 +93,7 @@ def send_sms(phone_number, code):
                 status = recipient.get('status')
                 if status == 'Success':
                     message_id = recipient.get('messageId')
-                    print(f"✅ SMS sent successfully! Message ID: {message_id}")
+                    logger.info("SMS sent, id=%s", message_id)
                     return True
                 else:
                     reason = f"{status} (code: {recipient.get('statusCode')})"
@@ -124,7 +122,7 @@ def send_sms_auto_fallback(phone_number, code):
         message = f"Your iSchool verification code is {code}. Valid for 10 minutes."
         sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
         
-        print(f"📤 Sending SMS to {formatted_phone}")
+        logger.info("Sending SMS to %s", formatted_phone)
         
         options = {
             "message": message,
@@ -137,7 +135,7 @@ def send_sms_auto_fallback(phone_number, code):
         
         response = sms.send(**options)
         
-        print(f"📨 API Response: {response}")
+        logger.debug("AT API response received")
         
         if response and isinstance(response, dict):
             recipients = response.get('SMSMessageData', {}).get('Recipients', [])
@@ -149,5 +147,5 @@ def send_sms_auto_fallback(phone_number, code):
         return False
         
     except Exception as e:
-        print(f"❌ SMS Error: {e}")
+        logger.error("SMS error: %s", e, exc_info=True)
         return False

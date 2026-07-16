@@ -70,7 +70,7 @@ class TeacherApplicationView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        print("🔥 Incoming Data:", request.data)
+        logger.debug("Incoming data on %s", request.path)
         serializer = TeacherApplicationSerializer(data=request.data)
         
         if serializer.is_valid():

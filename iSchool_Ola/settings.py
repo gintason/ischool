@@ -127,6 +127,15 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
+    # Abuse protection. 'otp' is deliberately tight — each SMS costs money and an
+    # unthrottled 6-digit code is brute-forceable. Behind a proxy (Render), set
+    # NUM_PROXIES so the real client IP is used, not the load balancer's.
+    'DEFAULT_THROTTLE_RATES': {
+        'otp': '5/min',
+        'login': '10/min',
+        'register': '20/hour',
+    },
+    'NUM_PROXIES': 1,
 }
 
 # JWT Settings

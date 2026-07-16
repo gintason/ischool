@@ -177,14 +177,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
 
     def is_subscription_active(self):
+        # A user may simply have no subscription yet; the related-object access
+        # raises RelatedObjectDoesNotExist (a subclass of ObjectDoesNotExist).
+        # The previous code caught OleStudentSubscription.DoesNotExist by a name
+        # that wasn't imported here, so the guard itself raised NameError.
+        from django.core.exceptions import ObjectDoesNotExist
         try:
             subscription = self.ole_subscription
-            is_active = subscription.end_date >= timezone.now()
-            print(f"📅 Subscription ends: {subscription.end_date}, Now: {timezone.now()}, Active: {is_active}")
-            return is_active
-        except OleStudentSubscription.DoesNotExist:
-            print("❌ No active OleStudentSubscription for user.")
+        except ObjectDoesNotExist:
             return False
+        if not subscription or not subscription.end_date:
+            return False
+        return subscription.end_date >= timezone.now()
 
 
 class RegistrationGroup(models.Model):
@@ -315,7 +319,7 @@ class OleStudentSubjectAccess(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.student.email} - {self.class_level.name}"
+        return f"{self.ole_student.email} - {self.ole_class_level.name}"
 
 
 class AdminActionLog(models.Model):

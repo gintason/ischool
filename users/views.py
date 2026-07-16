@@ -70,6 +70,23 @@ User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
+from rest_framework.throttling import SimpleRateThrottle, AnonRateThrottle
+from rest_framework.decorators import throttle_classes
+
+
+class OTPRateThrottle(AnonRateThrottle):
+    """Tight limit on OTP sends — each SMS costs money and codes are guessable."""
+    scope = "otp"
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
+
+
+class RegisterRateThrottle(AnonRateThrottle):
+    scope = "register"
+
+
 
 
 def generate_password(length=8):
@@ -100,6 +117,7 @@ class UserRegistrationView(generics.CreateAPIView):
 # Token Authentication View (Login)
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 # Registration Group Creation (For Schools/Homes/Referrals)
 class RegistrationGroupView(APIView):
@@ -236,6 +254,7 @@ class StudentRegistrationView(generics.CreateAPIView):
 # 2. Custom JWT Login View
 class CustomLoginView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 
 class UserMeView(APIView):
@@ -248,6 +267,7 @@ class UserMeView(APIView):
 
 
 class OleStudentRegistrationView(APIView):
+    throttle_classes = [RegisterRateThrottle]
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -325,7 +345,7 @@ class OleStudentRegistrationView(APIView):
             },
         }
 
-        print("🚀 Payload being sent to Paystack:", json.dumps(data, indent=2))
+        logger.debug("Paystack init payload prepared for %s", email)
 
         try:
             response = requests.post(
@@ -833,6 +853,7 @@ def format_phone_number(phone):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
 def send_verification_code(request):
     try:
         phone = request.data.get('phone_number')
@@ -861,7 +882,7 @@ def send_verification_code(request):
         verification = PhoneVerification.objects.create(phone_number=phone)
         
         logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
-        print(f"📱 VERIFICATION CODE for {phone}: {verification.code}")
+        logger.info("Verification code generated for %s", phone)
         
         # Check if we're in sandbox mode
         is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
@@ -894,7 +915,7 @@ def send_verification_code(request):
         
     except Exception as e:
         logger.error(f"Error in send_verification_code: {str(e)}", exc_info=True)
-        print(f"❌ Error: {str(e)}")
+        logger.error("send_verification_code error: %s", e, exc_info=True)
         return Response(
             {'error': f'Server error: {str(e)}'}, 
             status=500
@@ -903,13 +924,14 @@ def send_verification_code(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
 def verify_code(request):
     try:
         phone = request.data.get('phone_number')
         code = request.data.get('code')
         platform = request.data.get('platform', 'ole')
         
-        print(f"🔍 Verifying - Original Phone: {phone}, Code: {code}")
+        logger.debug("Verifying phone %s", phone)
         
         if not phone or not code:
             return Response({'error': 'Phone number and code are required'}, status=400)
@@ -926,12 +948,12 @@ def verify_code(request):
                 is_verified=False
             )
             
-            print(f"🔍 Found record - Expires at: {verification.expires_at}")
-            print(f"🔍 Current time: {timezone.now()}")
+            logger.debug("OTP record expires at %s", verification.expires_at)
+            logger.debug("Current time %s", timezone.now())
             
             # Check if expired
             if verification.is_expired():
-                print(f"❌ Code expired")
+                logger.info("OTP expired for %s", phone)
                 # Delete expired code
                 verification.delete()
                 return Response({
@@ -943,7 +965,7 @@ def verify_code(request):
             verification.is_verified = True
             verification.save()
             
-            print(f"✅ Code verified successfully")
+            logger.info("OTP verified for %s", phone)
             
             return Response({
                 'message': 'Phone number verified successfully',
@@ -952,11 +974,11 @@ def verify_code(request):
             })
             
         except PhoneVerification.DoesNotExist:
-            print(f"❌ No valid verification record found for phone: {phone}, code: {code}")
+            logger.info("No valid OTP record for %s", phone)
             return Response({'error': 'Invalid verification code'}, status=400)
             
     except Exception as e:
-        print(f"❌ Error in verify_code: {str(e)}")
+        logger.error("verify_code error: %s", e, exc_info=True)
         import traceback
         traceback.print_exc()
         return Response({'error': f'Server error: {str(e)}'}, status=500)
