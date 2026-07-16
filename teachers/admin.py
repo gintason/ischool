@@ -511,9 +511,34 @@ class TeacherAssignmentAdmin(admin.ModelAdmin):
 
 
 # Register remaining models with default admin behavior
-admin.site.register(OleSubject)
-admin.site.register(OleClassLevel)
-admin.site.register(OleTopic)
+class OleTopicInline(admin.TabularInline):
+    """Add topics straight from the subject or class-level page."""
+    model = OleTopic
+    extra = 1
+    fields = ("title", "class_level", "subject", "reference_material")
+    autocomplete_fields = ("class_level", "subject")
+
+
+@admin.register(OleSubject)
+class OleSubjectAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    ordering = ("name",)
+    inlines = [OleTopicInline]
+
+
+@admin.register(OleClassLevel)
+class OleClassLevelAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    ordering = ("name",)
+
+
+@admin.register(OleTopic)
+class OleTopicAdmin(admin.ModelAdmin):
+    list_display = ("title", "subject", "class_level")
+    list_filter = ("class_level", "subject")
+    search_fields = ("title", "subject__name", "class_level__name")
+    autocomplete_fields = ("subject", "class_level")
+    ordering = ("class_level__name", "subject__name", "title")
 admin.site.register(LiveClassSession)
 
 
