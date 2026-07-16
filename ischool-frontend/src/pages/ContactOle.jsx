@@ -23,7 +23,7 @@ const ContactOle = () => {
     setSubmitted(false);
 
     try {
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/core/ole-contact`, {
+      await axios.post(`${(import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api")}/core/ole-contact`, {
         full_name: formData.fullName,
         email: formData.email,
         message: formData.message,

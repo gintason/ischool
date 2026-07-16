@@ -7,8 +7,8 @@ import './styles/SignUpPage.css';
 import CenteredToast from '../components/CenteredToast';
 import bgImage from '../assets/signup-bg.png';
 
-const SLOT_PRICE_MONTHLY = 6200;
-const SLOT_PRICE_YEARLY = 52000;
+const SLOT_PRICE_MONTHLY = 100;
+const SLOT_PRICE_YEARLY = 100;
 
 const SignUpPage = () => {
   const [showToast, setShowToast] = useState(false);
@@ -242,8 +242,8 @@ const SignUpPage = () => {
               <Form.Group className="mb-3" controlId="formGridBillingCycle">
                 <Form.Label>Billing Cycle</Form.Label>
                 <Form.Select name="billingCycle" value={formData.billingCycle} onChange={handleChange} required>
-                  <option value="monthly">Monthly - ₦6200</option>
-                  <option value="yearly">Yearly - ₦52000</option>
+                  <option value="monthly">Monthly - ₦100</option>
+                  <option value="yearly">Yearly - ₦100</option>
                 </Form.Select>
               </Form.Group>
 

@@ -22,7 +22,7 @@ const ContactPage = () => {
     setError(false);
 
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/core/ola-contact`, {
+      const res = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api")}/core/ola-contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),

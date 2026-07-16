@@ -11,7 +11,7 @@ const RenewSubscription = () => {
     setToken(localStorage.getItem("ole_token"));
     setUserEmail(localStorage.getItem("ole_email"));
     axios
-      .get(`${process.env.REACT_APP_API_BASE_URL}/ole-student/subscription-plans/`)
+      .get(`${(import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api")}/ole-student/subscription-plans/`)
       .then((res) => setPlans(res.data))
       .catch((err) => console.error(err));
   }, []);
@@ -24,7 +24,7 @@ const RenewSubscription = () => {
 
     try {
       const initRes = await axios.post(
-        `${process.env.REACT_APP_API_BASE_URL}/ole-student/init-subscription/`,
+        `${(import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api")}/ole-student/init-subscription/`,
         { plan_id: selectedPlanId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -40,7 +40,7 @@ const RenewSubscription = () => {
         callback: async (response) => {
           try {
             await axios.post(
-              `${process.env.REACT_APP_API_BASE_URL}/ole-student/verify-subscription-payment/`,
+              `${(import.meta.env.VITE_API_BASE_URL || "https://api.ischool.ng/api")}/ole-student/verify-subscription-payment/`,
               { reference: response.reference },
               { headers: { Authorization: `Bearer ${token}` } }
             );
