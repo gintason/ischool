@@ -16,11 +16,17 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# ALLOWED_HOSTS - Read from environment variable for production
-if DEBUG:
-    ALLOWED_HOSTS = ['*']  # Allow all hosts during development
+# ALLOWED_HOSTS — always prefer the explicit env var, in every environment.
+# Falling back to ['*'] only when DEBUG is on AND nothing is configured means a
+# single stray DEBUG=True in production can't silently open the host to the world
+# unless ALLOWED_HOSTS is also empty.
+_hosts = config('ALLOWED_HOSTS', default='')
+if _hosts:
+    ALLOWED_HOSTS = [h.strip() for h in _hosts.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['*']
 else:
-    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
+    ALLOWED_HOSTS = []
 
 # Application definition
 INSTALLED_APPS = [
@@ -128,7 +134,7 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
-    "SIGNING_KEY": SECRET_KEY,
+    "SIGNING_KEY": config("JWT_SIGNING_KEY", default=SECRET_KEY),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
     "TOKEN_OBTAIN_SERIALIZER": "users.serializers.MyTokenObtainPairSerializer",

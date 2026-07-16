@@ -229,10 +229,23 @@ class RegistrationGroup(models.Model):
         super().save(*args, **kwargs)
 
     def decrease_slots(self, count=1):
-        if self.slots_remaining < count:
-            raise ValueError("You don't have enough slots left, please buy more to continue")
-        self.slots_remaining -= count
-        self.save()
+        """
+        Atomically consume `count` slots.
+
+        The previous read-modify-write let two concurrent registrations both
+        read the last slot and both succeed — overselling. This locks the row
+        (select_for_update) inside a transaction so the check and decrement are
+        a single atomic step.
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            fresh = type(self).objects.select_for_update().get(pk=self.pk)
+            if fresh.slots_remaining < count:
+                raise ValueError("You don't have enough slots left, please buy more to continue")
+            fresh.slots_remaining -= count
+            fresh.save(update_fields=["slots_remaining"])
+            self.slots_remaining = fresh.slots_remaining
 
     def __str__(self):
         return f"{self.name} ({self.account_type}) - {self.slots_remaining} slots"
@@ -248,7 +261,9 @@ class StudentSlot(models.Model):
     full_name = models.CharField(max_length=255)
     email = models.EmailField()
     username = models.CharField(max_length=100, unique=True)
-    password = models.CharField(max_length=100)  # same as username for now
+    # Bookkeeping table, not a login account. Kept blank; real credentials
+    # live on CustomUser (hashed). Column retained to avoid a destructive drop.
+    password = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

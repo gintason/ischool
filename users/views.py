@@ -203,7 +203,9 @@ def create_student_slots(request):
             full_name=student.get('full_name'),
             email=student.get('email'),
             username=username,
-            password=username  # temporary
+            # StudentSlot is bookkeeping only — it is NOT a login account (those
+            # are CustomUser, hashed). No usable password is stored here.
+            password="",
         )
         created_slots.append(StudentSlotSerializer(slot).data)
 

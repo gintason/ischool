@@ -7,6 +7,16 @@ from .models import CustomUser
 from django.core.mail import send_mail
 from django.conf import settings
 from .models import StudentSlot
+import secrets
+import string
+
+
+def generate_secure_password(length=10):
+    """A random, human-typable password. Ambiguous characters removed so the
+    emailed credential is easy to read and enter (no O/0, l/1, I)."""
+    alphabet = "".join(c for c in (string.ascii_letters + string.digits)
+                       if c not in "O0oIl1")
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from teachers.models import OleClassLevel, OleSubject, LiveClassSchedule, OleLesson, OleMaterial, LiveClassSession
 from users.models import CustomUser
@@ -54,13 +64,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Step 3: Construct username
         username = f"{state_code}/{serial_prefix}/{user_serial}"
 
-        # Step 4: Create user with generated username as password
+        # Step 4: Create user with a RANDOM password (never equal to the
+        # username — usernames are public and follow a predictable serial, so a
+        # username-as-password is effectively no password at all). The raw value
+        # is emailed once below and never persisted anywhere.
+        raw_password = generate_secure_password()
         user = CustomUser.objects.create_user(
             username=username,
             registration_group=group,
             **validated_data
         )
-        user.set_password(username)  # Password same as username
+        user.set_password(raw_password)
         user.save()
 
         # Step 5: Reduce available slot
@@ -73,7 +87,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             f"Thank you for registering with iSchool Ola.\n\n"
             f"Your login credentials are:\n"
             f"Username: {username}\n"
-            f"Password: {username}\n\n"
+            f"Password: {raw_password}\n\n"
             f"Please keep these details safe and secure.\n\n"
             f"iSchool Ola Team"
         )
@@ -105,6 +119,9 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
 
         if not user.check_password(password):
             raise serializers.ValidationError("Invalid email or password.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("This account has been deactivated.")
 
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
@@ -140,8 +157,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
 class StudentSlotSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentSlot
-        fields = ['id', 'main_user', 'full_name', 'email', 'username', 'password', 'created_at']
-        read_only_fields = ['username', 'password', 'main_user', 'created_at']
+        fields = ['id', 'main_user', 'full_name', 'email', 'username', 'created_at']
+        read_only_fields = ['username', 'main_user', 'created_at']
         
     
 class StudentDetailSerializer(serializers.Serializer):
