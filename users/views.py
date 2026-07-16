@@ -9,7 +9,6 @@ from .serializers import (UserRegistrationSerializer,
 
 from .models import RegistrationGroup, OlePaymentVerification
 from .permissions import  IsTeacherUser, IsStudentUser, IsParentUser, IsAdminUser, IsOleStudentUser
-from rest_framework import status, permissions
 from .serializers import CustomUserSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
@@ -18,12 +17,10 @@ from .models import StudentSlot
 from .serializers import StudentSlotSerializer
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
 from django.conf import settings
 from dj_rest_auth.views import LoginView
 from emails.sendgrid_email import send_email
@@ -40,13 +37,10 @@ from .serializers import (
     UserRegistrationSerializer,
     MyTokenObtainPairSerializer, LiveClassScheduleDetailSerializer, LessonHistorySerializer, OleMaterialSerializer
 )
-import requests
 import json
 import random
 import uuid
 import string
-from django.utils import timezone
-from django.conf import settings
 from django.db import IntegrityError  # Make sure this is imported at the top
 from django.core.mail import send_mail
 from django.contrib import messages
@@ -54,16 +48,12 @@ from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from .models import PhoneVerification
 from .sms_services import send_sms
 import logging
 import threading
 from django.core.cache import cache
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
