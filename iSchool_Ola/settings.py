@@ -253,19 +253,18 @@ PAYSTACK_CALLBACK_URL = "https://api.ischool.ng/ole-student/verify-payment"
 OLE_PAYMENT_CALLBACK_URL = os.getenv("OLE_PAYMENT_CALLBACK_URL", "https://www.ischool.ng/ole-subscription/verify")
 
 PAYSTACK_PLAN_IDS = {
-    "monthly": "PLN_ky27i039aj6tws7",
-    "ola_monthly": "PLN_ggznevdmbw5pjb4",
-    "ola_yearly": "PLN_r1rhq04xs8yd3uv"
+    "monthly": "PLN_te234irfrrc753l",
+    "ola_monthly": "PLN_3mqbv2tbtch9d2a",
+    "ola_yearly": "PLN_b5q8x983srq1ei9",
 }
 PAYSTACK_PLAN_AMOUNTS = {
-    "monthly": 620000,     # ✅ ₦6,200 in kobo
-    "ola_monthly": 610000, # ₦6,100 in kobo (OLA specific)
-    "ola_yearly": 5200000, # ✅ Changed from 520000 to 5200000 (₦52,000 in kobo)
+    "monthly":     10000,   # ₦100
+    "ola_monthly": 10000,   # ₦100
+    "ola_yearly":  10000,   # ₦100
 }
 # Slot prices (in kobo)
-SLOT_PRICE_MONTHLY = 620000   # ✅ Changed from 610000 to 620000
-SLOT_PRICE_YEARLY = 5200000   # ✅ Changed from 520000 to 5200000
-
+SLOT_PRICE_MONTHLY = 10000   # ₦100
+SLOT_PRICE_YEARLY  = 10000   # ₦100
 # Celery
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
