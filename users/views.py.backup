@@ -734,15 +734,7 @@ def initialize_subscription_payment(request):
     }
 
     reference = f"SUB-{uuid.uuid4().hex[:10].upper()}"
-
-    # ✅ Mobile clients must be sent to the API callback, which responds with a
-    # redirect into the app (ischoolmobile://payment-callback?...). The web
-    # callback is a plain website and strands mobile users in the browser.
-    is_mobile = request.data.get("is_mobile", False)
-    if is_mobile:
-        callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"
-    else:
-        callback_url = settings.OLE_PAYMENT_CALLBACK_URL
+    callback_url = settings.OLE_PAYMENT_CALLBACK_URL
 
     paystack_payload = {
         "reference": reference,
@@ -753,8 +745,7 @@ def initialize_subscription_payment(request):
             "user_id": user.id,
             "plan_id": plan["id"],
             "plan_name": plan["name"],
-            "duration_days": plan["duration_days"],
-            "is_mobile": is_mobile
+            "duration_days": plan["duration_days"]
         }
     }
     return Response(paystack_payload)@api_view(["POST"])
