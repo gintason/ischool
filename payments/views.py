@@ -267,14 +267,22 @@ def verify_and_register(request):
         return Response({"detail": "Transaction verification failed."}, status=status.HTTP_400_BAD_REQUEST)
 
     # Amount check
-    amount_paid = float(res_data.get("data", {}).get("amount", 0)) / 100
+    # ⚠️ UNIT BUG (fixed): Paystack reports `amount` in KOBO, and
+    # SLOT_PRICE_MONTHLY / SLOT_PRICE_YEARLY are ALSO stored in kobo
+    # (10000 == ₦100). The old code divided the paid amount by 100 (converting
+    # it to naira) and then compared it against a kobo figure, so the check was
+    # naira < kobo — e.g. 100 < 10000 — and EVERY payment was rejected with
+    # "Amount paid does not match expected slot payment."
+    # Compare in kobo; keep a naira value for storage/display.
+    amount_paid_kobo = float(res_data.get("data", {}).get("amount", 0))
+    amount_paid = amount_paid_kobo / 100  # naira, used for PaymentTransaction
     if billing_cycle not in ["monthly", "yearly"]:
         billing_cycle = "monthly"
 
     slot_price = settings.SLOT_PRICE_MONTHLY if billing_cycle == "monthly" else settings.SLOT_PRICE_YEARLY
-    expected_amount = slots * slot_price
+    expected_amount_kobo = slots * slot_price  # kobo, same unit as Paystack
 
-    if amount_paid < expected_amount:
+    if amount_paid_kobo < expected_amount_kobo:
         return Response({"detail": "Amount paid does not match expected slot payment."}, status=status.HTTP_400_BAD_REQUEST)
 
     # Create group and users atomically
