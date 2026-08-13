@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import StudentSlot
 from .serializers import StudentSlotSerializer
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from rest_framework import generics
@@ -49,7 +49,6 @@ from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework.decorators import api_view, throttle_classes, permission_classe
 from .models import PhoneVerification
 from .sms_services import send_sms
 import logging
