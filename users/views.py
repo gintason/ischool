@@ -1176,3 +1176,16 @@ def get_user_profile(request):
             profile_data['subscription'] = None
     
     return Response(profile_data)
+
+
+@csrf_exempt
+def api_root(request):
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Users API is working',
+        'available_endpoints': [
+            'POST /api/users/phone/send-code/',
+            'POST /api/users/phone/verify-code/',
+            'POST /api/users/phone/check-verification/',
+        ]
+    })
