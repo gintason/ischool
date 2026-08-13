@@ -83,7 +83,7 @@ urlpatterns = [
     path('', views.api_root, name='api-root'),  # Add this for /api/users/
 
     # Phone Login Logout System
-    path('phone/login/', views.phone_login_or_register, name='phone-login'),
+    path('phone/login/', views.login_or_register, name='phone-login'),
     path('phone/logout/', views.phone_logout, name='phone-logout'),
     path('profile/', views.get_user_profile, name='user-profile'),
 ]

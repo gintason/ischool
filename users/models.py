@@ -10,6 +10,7 @@ from datetime import date
 import random
 
 
+
 class CustomUserManager(BaseUserManager):
 
     def create_user(self, email, password=None, role=None, **extra_fields):
@@ -370,23 +371,34 @@ class OlePaymentVerification(models.Model):
         verbose_name_plural = "Payment Verifications"
 
 # Add to your existing models.py
-class PhoneVerification(models.Model):
-    phone_number = models.CharField(max_length=15)
+class VerificationCode(models.Model):
+    METHOD_CHOICES = (
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+    )
+    identifier = models.CharField(max_length=255, db_index=True)  # email or phone
     code = models.CharField(max_length=6)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
-    
+
     def save(self, *args, **kwargs):
         if not self.code:
             self.code = str(random.randint(100000, 999999))
         if not self.expires_at:
             self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
         super().save(*args, **kwargs)
-    
+
     def is_expired(self):
-        """Check if the verification code has expired"""
         return timezone.now() > self.expires_at
-    
+
     def __str__(self):
-        return f"{self.phone_number} - {self.code} - {'Verified' if self.is_verified else 'Pending'}"
+        return f"{self.identifier} - {self.code} ({self.method})"
+
+    class Meta:
+        verbose_name = "Verification Code"
+        verbose_name_plural = "Verification Codes"
+        indexes = [
+            models.Index(fields=['identifier', 'method']),
+        ]

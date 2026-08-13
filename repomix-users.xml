@@ -1,0 +1,4848 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: users/**/*
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+users/
+  management/
+    commands/
+      __init__.py
+      test_sms.py
+    __init__.py
+  migrations/
+    __init__.py
+    0001_initial.py
+    0002_alter_customuser_username.py
+    0003_registrationgroup_slots_remaining.py
+    0004_remove_customuser_group_and_more.py
+    0005_registrationgroup_serial_prefix_and_more.py
+    0006_studentslot.py
+    0007_alter_registrationgroup_proof_of_payment.py
+    0008_rename_date_registered_registrationgroup_created_at_and_more.py
+    0009_rename_slots_registrationgroup_slots_applied_and_more.py
+    0010_alter_customuser_managers.py
+    0011_alter_customuser_managers.py
+    0012_customuser_profile_photo.py
+    0013_customuser_date_joined.py
+    0014_customuser_ole_class_level_customuser_ole_subjects_and_more.py
+    0015_olestudentsubscription.py
+    0016_olestudentsubjectaccess.py
+    0017_adminactionlog_subscriptionplan.py
+    0018_rename_student_olestudentsubjectaccess_ole_student.py
+    0019_alter_adminactionlog_options_and_more.py
+    0020_customuser_subscription_expires_on.py
+    0021_registrationgroup_billing_cycle_and_more.py
+    0022_olepaymentverification.py
+    0023_phoneverification.py
+    0024_customuser_phone_number.py
+    0025_studentslot_password_blank.py
+    0026_customuser_indexes.py
+    0027_verificationcode_delete_phoneverification_and_more.py
+  __init__.py
+  admin.py
+  apps.py
+  models.py
+  permissions.py
+  serializers.py
+  signals.py
+  sms_services.py
+  tests.py
+  urls.py
+  utils.py
+  views.py
+  views.py.backup
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="users/management/commands/__init__.py">
+
+</file>
+
+<file path="users/management/commands/test_sms.py">
+"""
+Diagnose SMS/OTP delivery.
+
+Prints the exact Africa's Talking config in use, then attempts a real send and
+shows the raw provider response — so a failing OTP can be traced to its cause
+(sandbox mode, exhausted credit, unapproved sender ID, bad key) without guessing.
+"""
+from django.conf import settings
+from django.core.management.base import BaseCommand
+
+from users.sms_services import format_phone_for_sms, send_sms
+
+
+class Command(BaseCommand):
+    help = "Send a test SMS to verify Africa's Talking configuration."
+
+    def add_arguments(self, parser):
+        parser.add_argument("phone", help="Recipient phone (e.g. 08031234567)")
+
+    def handle(self, *args, **options):
+        phone = options["phone"]
+        self.stdout.write("Africa's Talking configuration:")
+        self.stdout.write(f"  username : {settings.AFRICASTALKING_USERNAME}")
+        self.stdout.write(f"  sender   : {settings.AFRICASTALKING_SENDER_ID or '(default)'}")
+        self.stdout.write(f"  api_key  : {'set' if settings.AFRICASTALKING_API_KEY else 'MISSING'}")
+
+        if settings.AFRICASTALKING_USERNAME == "sandbox":
+            self.stdout.write(self.style.WARNING(
+                "\nUsername is 'sandbox' — real SMS is NOT delivered in sandbox mode. "
+                "Set AFRICASTALKING_USERNAME to your live username to send real texts."
+            ))
+
+        self.stdout.write(f"\nFormatted number: {format_phone_for_sms(phone)}")
+        self.stdout.write("Sending test code 123456 ...")
+        ok = send_sms(phone, "123456")
+        if ok:
+            self.stdout.write(self.style.SUCCESS("Reported success — check the handset."))
+        else:
+            self.stdout.write(self.style.ERROR(
+                "Send failed. Check the logged reason above (credit, sender ID, key)."
+            ))
+</file>
+
+<file path="users/management/__init__.py">
+
+</file>
+
+<file path="users/migrations/__init__.py">
+
+</file>
+
+<file path="users/migrations/0001_initial.py">
+# Generated by Django 5.2 on 2025-05-05 17:41
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        ("auth", "0012_alter_user_first_name_max_length"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="RegistrationGroup",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "group_type",
+                    models.CharField(
+                        choices=[
+                            ("school", "School"),
+                            ("home", "Home"),
+                            ("referral", "Accredited Referral"),
+                        ],
+                        max_length=10,
+                    ),
+                ),
+                ("state", models.CharField(max_length=50)),
+                ("slots_applied", models.PositiveIntegerField()),
+                ("proof_of_payment", models.FileField(upload_to="payment_proofs/")),
+                ("account_details", models.TextField(blank=True, null=True)),
+                ("date_registered", models.DateTimeField(auto_now_add=True)),
+            ],
+        ),
+        migrations.CreateModel(
+            name="CustomUser",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("password", models.CharField(max_length=128, verbose_name="password")),
+                (
+                    "last_login",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="last login"
+                    ),
+                ),
+                (
+                    "is_superuser",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Designates that this user has all permissions without explicitly assigning them.",
+                        verbose_name="superuser status",
+                    ),
+                ),
+                ("email", models.EmailField(max_length=254, unique=True)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[
+                            ("admin", "Admin"),
+                            ("teacher", "Teacher"),
+                            ("student", "Student"),
+                            ("parent", "Parent"),
+                        ],
+                        max_length=20,
+                    ),
+                ),
+                ("username", models.CharField(max_length=50, unique=True)),
+                ("full_name", models.CharField(max_length=100)),
+                ("is_active", models.BooleanField(default=True)),
+                ("is_staff", models.BooleanField(default=False)),
+                (
+                    "groups",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="The groups this user belongs to. A user will get all permissions granted to each of their groups.",
+                        related_name="user_set",
+                        related_query_name="user",
+                        to="auth.group",
+                        verbose_name="groups",
+                    ),
+                ),
+                (
+                    "user_permissions",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="Specific permissions for this user.",
+                        related_name="user_set",
+                        related_query_name="user",
+                        to="auth.permission",
+                        verbose_name="user permissions",
+                    ),
+                ),
+                (
+                    "group",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="users.registrationgroup",
+                    ),
+                ),
+            ],
+            options={
+                "abstract": False,
+            },
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0002_alter_customuser_username.py">
+# Generated by Django 5.2 on 2025-05-05 18:34
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0001_initial"),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name="customuser",
+            name="username",
+            field=models.CharField(blank=True, max_length=50, unique=True),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0003_registrationgroup_slots_remaining.py">
+# Generated by Django 5.2 on 2025-05-05 19:23
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0002_alter_customuser_username"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="slots_remaining",
+            field=models.IntegerField(default=0),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0004_remove_customuser_group_and_more.py">
+# Generated by Django 5.2 on 2025-05-05 19:40
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0003_registrationgroup_slots_remaining"),
+    ]
+
+    operations = [
+        migrations.RemoveField(
+            model_name="customuser",
+            name="group",
+        ),
+        migrations.AddField(
+            model_name="customuser",
+            name="registration_group",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="users",
+                to="users.registrationgroup",
+            ),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0005_registrationgroup_serial_prefix_and_more.py">
+# Generated by Django 5.2 on 2025-05-08 12:06
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0004_remove_customuser_group_and_more"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="serial_prefix",
+            field=models.CharField(
+                blank=True, help_text="E.g., S001 or H002", max_length=5
+            ),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="state_code",
+            field=models.CharField(
+                blank=True, help_text="E.g., LA, AB, KD", max_length=3
+            ),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0006_studentslot.py">
+# Generated by Django 5.2 on 2025-05-08 16:00
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0005_registrationgroup_serial_prefix_and_more"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="StudentSlot",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("full_name", models.CharField(max_length=255)),
+                ("email", models.EmailField(max_length=254)),
+                ("username", models.CharField(max_length=100, unique=True)),
+                ("password", models.CharField(max_length=100)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "main_user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="student_slots",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0007_alter_registrationgroup_proof_of_payment.py">
+# Generated by Django 5.2 on 2025-05-12 09:25
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0006_studentslot"),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name="registrationgroup",
+            name="proof_of_payment",
+            field=models.FileField(blank=True, null=True, upload_to="payment_proofs/"),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0008_rename_date_registered_registrationgroup_created_at_and_more.py">
+# Generated by Django 5.2 on 2025-05-12 11:32
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0007_alter_registrationgroup_proof_of_payment"),
+    ]
+
+    operations = [
+        migrations.RenameField(
+            model_name="registrationgroup",
+            old_name="date_registered",
+            new_name="created_at",
+        ),
+        migrations.RemoveField(
+            model_name="registrationgroup",
+            name="group_type",
+        ),
+        migrations.RemoveField(
+            model_name="registrationgroup",
+            name="proof_of_payment",
+        ),
+        migrations.RemoveField(
+            model_name="registrationgroup",
+            name="slots_applied",
+        ),
+        migrations.RemoveField(
+            model_name="registrationgroup",
+            name="slots_remaining",
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="account_type",
+            field=models.CharField(
+                choices=[
+                    ("school", "School"),
+                    ("home", "Home"),
+                    ("referral", "Referral"),
+                ],
+                default="school",
+                max_length=20,
+            ),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="email",
+            field=models.EmailField(default="email@example.com", max_length=254),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="location",
+            field=models.CharField(default="Ikeja", max_length=100),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="name",
+            field=models.CharField(default="John Ken", max_length=100),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="referral_code",
+            field=models.CharField(blank=True, max_length=50),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="slots",
+            field=models.PositiveIntegerField(default=1),
+        ),
+        migrations.AlterField(
+            model_name="registrationgroup",
+            name="account_details",
+            field=models.TextField(blank=True, default="Not provided"),
+        ),
+        migrations.AlterField(
+            model_name="registrationgroup",
+            name="serial_prefix",
+            field=models.CharField(blank=True, max_length=10),
+        ),
+        migrations.AlterField(
+            model_name="registrationgroup",
+            name="state",
+            field=models.CharField(default="Lagos", max_length=100),
+        ),
+        migrations.AlterField(
+            model_name="registrationgroup",
+            name="state_code",
+            field=models.CharField(blank=True, max_length=10),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0009_rename_slots_registrationgroup_slots_applied_and_more.py">
+# Generated by Django 5.2 on 2025-05-12 12:03
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0008_rename_date_registered_registrationgroup_created_at_and_more"),
+    ]
+
+    operations = [
+        migrations.RenameField(
+            model_name="registrationgroup",
+            old_name="slots",
+            new_name="slots_applied",
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="slots_remaining",
+            field=models.PositiveIntegerField(default=1),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0010_alter_customuser_managers.py">
+# Generated by Django 5.2 on 2025-05-12 12:26
+
+import users.models
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0009_rename_slots_registrationgroup_slots_applied_and_more"),
+    ]
+
+    operations = [
+        migrations.AlterModelManagers(
+            name="customuser",
+            managers=[
+                ("objects", users.models.CustomUserManager()),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0011_alter_customuser_managers.py">
+# Generated by Django 5.2 on 2025-05-12 14:09
+
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0010_alter_customuser_managers"),
+    ]
+
+    operations = [
+        migrations.AlterModelManagers(
+            name="customuser",
+            managers=[],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0012_customuser_profile_photo.py">
+# Generated by Django 5.2.1 on 2025-05-16 07:30
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0011_alter_customuser_managers"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="customuser",
+            name="profile_photo",
+            field=models.ImageField(blank=True, null=True, upload_to="profile_photos/"),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0013_customuser_date_joined.py">
+# Generated by Django 5.2.1 on 2025-05-16 07:35
+
+import django.utils.timezone
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0012_customuser_profile_photo"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="customuser",
+            name="date_joined",
+            field=models.DateTimeField(default=django.utils.timezone.now),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0014_customuser_ole_class_level_customuser_ole_subjects_and_more.py">
+# Generated by Django 5.2.2 on 2025-06-12 03:41
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("teachers", "0004_studentattendancesummary_teacherlessonsummary"),
+        ("users", "0013_customuser_date_joined"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="customuser",
+            name="ole_class_level",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="ole_students",
+                to="teachers.oleclasslevel",
+            ),
+        ),
+        migrations.AddField(
+            model_name="customuser",
+            name="ole_subjects",
+            field=models.ManyToManyField(
+                blank=True, related_name="ole_students", to="teachers.olesubject"
+            ),
+        ),
+        migrations.AlterField(
+            model_name="customuser",
+            name="role",
+            field=models.CharField(
+                choices=[
+                    ("admin", "Admin"),
+                    ("teacher", "Teacher"),
+                    ("student", "Student"),
+                    ("parent", "Parent"),
+                    ("ole_student", "Ole Student"),
+                ],
+                max_length=20,
+            ),
+        ),
+        migrations.CreateModel(
+            name="OleStudentProfile",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "class_level",
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="teachers.oleclasslevel",
+                    ),
+                ),
+                ("subjects", models.ManyToManyField(to="teachers.olesubject")),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="ole_profile",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0015_olestudentsubscription.py">
+# Generated by Django 5.2.2 on 2025-06-12 04:20
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0014_customuser_ole_class_level_customuser_ole_subjects_and_more"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="OleStudentSubscription",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "plan_type",
+                    models.CharField(
+                        choices=[("monthly", "Monthly"), ("yearly", "Yearly")],
+                        max_length=10,
+                    ),
+                ),
+                ("start_date", models.DateTimeField(auto_now_add=True)),
+                ("end_date", models.DateTimeField()),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="ole_subscription",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0016_olestudentsubjectaccess.py">
+# Generated by Django 5.2.2 on 2025-06-14 12:09
+
+import django.db.models.deletion
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("teachers", "0005_teacherinterview"),
+        ("users", "0015_olestudentsubscription"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="OleStudentSubjectAccess",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "ole_class_level",
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="teachers.oleclasslevel",
+                    ),
+                ),
+                ("ole_subjects", models.ManyToManyField(to="teachers.olesubject")),
+                (
+                    "student",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0017_adminactionlog_subscriptionplan.py">
+# Generated by Django 5.2.3 on 2025-06-16 10:03
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0016_olestudentsubjectaccess"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="AdminActionLog",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "action_type",
+                    models.CharField(
+                        choices=[
+                            ("registration_attempt", "Registration Attempt"),
+                            ("user_created", "User Created"),
+                            ("subject_assigned", "Subject Assigned"),
+                            ("payment_initialized", "Payment Initialized"),
+                            ("existing_subscription", "Existing Subscription"),
+                            ("error", "Error"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("email", models.EmailField(max_length=254)),
+                ("details", models.TextField(blank=True, null=True)),
+                ("timestamp", models.DateTimeField(auto_now_add=True)),
+            ],
+        ),
+        migrations.CreateModel(
+            name="SubscriptionPlan",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("price", models.DecimalField(decimal_places=2, max_digits=6)),
+                ("duration_days", models.IntegerField()),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0018_rename_student_olestudentsubjectaccess_ole_student.py">
+# Generated by Django 5.2.3 on 2025-06-22 18:48
+
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0017_adminactionlog_subscriptionplan"),
+    ]
+
+    operations = [
+        migrations.RenameField(
+            model_name="olestudentsubjectaccess",
+            old_name="student",
+            new_name="ole_student",
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0019_alter_adminactionlog_options_and_more.py">
+# Generated by Django 5.2.3 on 2025-06-23 20:58
+
+import django.db.models.deletion
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("teachers", "0009_attendancelog_left_at_olelesson_completed_and_more"),
+        ("users", "0018_rename_student_olestudentsubjectaccess_ole_student"),
+    ]
+
+    operations = [
+        migrations.AlterModelOptions(
+            name="adminactionlog",
+            options={
+                "ordering": ["-timestamp"],
+                "verbose_name": "Admin Action Log",
+                "verbose_name_plural": "Admin Action Logs",
+            },
+        ),
+        migrations.AlterField(
+            model_name="adminactionlog",
+            name="action_type",
+            field=models.CharField(
+                choices=[
+                    ("create", "Create"),
+                    ("update", "Update"),
+                    ("delete", "Delete"),
+                    ("login", "Login"),
+                    ("logout", "Logout"),
+                    ("other", "Other"),
+                ],
+                max_length=20,
+            ),
+        ),
+        migrations.AlterField(
+            model_name="olestudentsubjectaccess",
+            name="ole_class_level",
+            field=models.ForeignKey(
+                default=1,
+                on_delete=django.db.models.deletion.CASCADE,
+                to="teachers.oleclasslevel",
+            ),
+            preserve_default=False,
+        ),
+        migrations.AlterField(
+            model_name="subscriptionplan",
+            name="name",
+            field=models.CharField(max_length=50),
+        ),
+        migrations.AlterField(
+            model_name="subscriptionplan",
+            name="price",
+            field=models.DecimalField(decimal_places=2, max_digits=10),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0020_customuser_subscription_expires_on.py">
+# Generated by Django 5.2.3 on 2025-07-03 11:39
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0019_alter_adminactionlog_options_and_more"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="customuser",
+            name="subscription_expires_on",
+            field=models.DateField(blank=True, null=True),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0021_registrationgroup_billing_cycle_and_more.py">
+# Generated by Django 5.2.3 on 2025-07-07 12:26
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0020_customuser_subscription_expires_on"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="billing_cycle",
+            field=models.CharField(
+                choices=[("monthly", "Monthly"), ("yearly", "Yearly")],
+                default="monthly",
+                max_length=20,
+            ),
+        ),
+        migrations.AddField(
+            model_name="registrationgroup",
+            name="subscription_expires",
+            field=models.DateField(blank=True, null=True),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0022_olepaymentverification.py">
+# Generated by Django 5.2.6 on 2025-09-14 17:32
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0021_registrationgroup_billing_cycle_and_more"),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="OlePaymentVerification",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "reference",
+                    models.CharField(db_index=True, max_length=100, unique=True),
+                ),
+                ("timestamp", models.DateTimeField(auto_now_add=True)),
+            ],
+            options={
+                "verbose_name": "Payment Verification",
+                "verbose_name_plural": "Payment Verifications",
+            },
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0023_phoneverification.py">
+# Generated by Django 5.2.6 on 2026-05-21 20:53
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('users', '0022_olepaymentverification'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='PhoneVerification',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('phone_number', models.CharField(max_length=15)),
+                ('code', models.CharField(max_length=6)),
+                ('is_verified', models.BooleanField(default=False)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('expires_at', models.DateTimeField()),
+            ],
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0024_customuser_phone_number.py">
+# Generated by Django 5.2.6 on 2026-06-12 13:49
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('users', '0023_phoneverification'),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name='customuser',
+            name='phone_number',
+            field=models.CharField(blank=True, max_length=15, null=True, unique=True),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0025_studentslot_password_blank.py">
+"""
+Make StudentSlot.password blank-by-default and purge existing raw values.
+
+StudentSlot is bookkeeping, not a login account — real credentials live on
+CustomUser (hashed). Storing a usable password here (previously equal to the
+username) was both pointless and a data-exposure risk, so existing values are
+blanked out.
+"""
+from django.db import migrations, models
+
+
+def blank_existing_passwords(apps, schema_editor):
+    StudentSlot = apps.get_model("users", "StudentSlot")
+    StudentSlot.objects.exclude(password="").update(password="")
+
+
+def noop(apps, schema_editor):
+    pass
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0024_customuser_phone_number"),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name="studentslot",
+            name="password",
+            field=models.CharField(blank=True, default="", max_length=100),
+        ),
+        migrations.RunPython(blank_existing_passwords, noop),
+    ]
+</file>
+
+<file path="users/migrations/0026_customuser_indexes.py">
+"""Add indexes on CustomUser hot filter columns (role, subscription, group)."""
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("users", "0025_studentslot_password_blank"),
+    ]
+
+    operations = [
+        migrations.AddIndex(
+            model_name="customuser",
+            index=models.Index(fields=["role"], name="user_role_idx"),
+        ),
+        migrations.AddIndex(
+            model_name="customuser",
+            index=models.Index(fields=["subscription_expires_on"], name="user_sub_expires_idx"),
+        ),
+        migrations.AddIndex(
+            model_name="customuser",
+            index=models.Index(fields=["registration_group"], name="user_reg_group_idx"),
+        ),
+    ]
+</file>
+
+<file path="users/migrations/0027_verificationcode_delete_phoneverification_and_more.py">
+# Generated by Django 6.0.8 on 2026-08-11 21:54
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('users', '0026_customuser_indexes'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='VerificationCode',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('identifier', models.CharField(db_index=True, max_length=255)),
+                ('code', models.CharField(max_length=6)),
+                ('method', models.CharField(choices=[('email', 'Email'), ('phone', 'Phone')], max_length=10)),
+                ('is_verified', models.BooleanField(default=False)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('expires_at', models.DateTimeField()),
+            ],
+            options={
+                'verbose_name': 'Verification Code',
+                'verbose_name_plural': 'Verification Codes',
+            },
+        ),
+        migrations.DeleteModel(
+            name='PhoneVerification',
+        ),
+        migrations.AddIndex(
+            model_name='verificationcode',
+            index=models.Index(fields=['identifier', 'method'], name='users_verif_identif_3e25c6_idx'),
+        ),
+    ]
+</file>
+
+<file path="users/__init__.py">
+
+</file>
+
+<file path="users/admin.py">
+# admin.py
+
+from django.contrib import admin
+from .models import CustomUser, RegistrationGroup, AdminActionLog
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from users.models import OleStudentSubscription  # adjust if needed
+from django.utils.html import format_html
+from django.utils import timezone
+
+
+@admin.register(CustomUser)
+class CustomUserAdmin(BaseUserAdmin):
+    list_display = ('email', 'username', 'full_name', 'role', 'is_staff', 'is_active')
+    search_fields = ('email', 'username', 'full_name')
+    list_filter = ('role', 'is_staff', 'is_active')
+    ordering = ('email',)
+    readonly_fields = ('username',)
+
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal Info', {'fields': ('full_name', 'role', 'registration_group')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important Dates', {'fields': ('last_login',)}),
+        ('System Info', {'fields': ('username',)}),
+    )
+
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'full_name', 'role', 'registration_group', 'password1', 'password2'),
+        }),
+    )
+
+@admin.register(RegistrationGroup)
+class RegistrationGroupAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'account_type', 'name', 'location', 'state', 'state_code', 
+        'serial_prefix', 'slots_applied', 'slots_remaining', 'referral_code', 'account_details', 'created_at'
+    )
+    list_filter = ('account_type', 'state', 'account_type')
+    readonly_fields = ('state_code', 'serial_prefix', 'created_at')
+    search_fields = ('name', 'email', 'referral_code')
+
+    def get_readonly_fields(self, request, obj=None):
+        # Make fields read-only once an object is created
+        if obj:
+            return self.readonly_fields + ('account_details',)  # Adding account details to readonly when an object is already created.
+        return self.readonly_fields
+    
+
+@admin.register(OleStudentSubscription)
+class OleStudentSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'plan_type', 'start_date', 'end_date', 'active_status']
+    list_filter = ['plan_type', 'start_date', 'end_date']
+
+    def active_status(self, obj):
+        return obj.is_active()
+    active_status.boolean = True
+    active_status.short_description = 'Active?'
+
+
+@admin.register(AdminActionLog)
+class AdminActionLogAdmin(admin.ModelAdmin):
+    list_display = ("action_type", "email", "short_details", "timestamp")
+    list_filter = ("action_type", "timestamp")
+    search_fields = ("email", "details")
+    ordering = ("-timestamp",)
+
+    def short_details(self, obj):
+        return (obj.details[:50] + "...") if obj.details and len(obj.details) > 50 else obj.details
+    short_details.short_description = "Details"
+</file>
+
+<file path="users/apps.py">
+from django.apps import AppConfig
+
+
+class UsersConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "users"
+
+    def ready(self):
+        import users.signals  # noqa
+</file>
+
+<file path="users/models.py">
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+from django.conf import settings
+from django.utils.crypto import get_random_string
+from datetime import date
+import random
+
+
+
+class CustomUserManager(BaseUserManager):
+
+    def create_user(self, email, password=None, role=None, **extra_fields):
+        if not email:
+            raise ValueError("Email is required")
+        email = self.normalize_email(email)
+        user = self.model(email=email, role=role, **extra_fields)
+
+        # ✅ Auto-generate username if not provided
+        if not user.username:
+            if role == "ole_student":
+                user.username = self.generate_ole_username(email)
+            elif user.registration_group:
+                user.username = self.generate_username_from_group(user.registration_group, role)
+            else:
+                # ✅ Use phone number based username for phone-auth users
+                if user.phone_number:
+                    user.username = f"phone_{user.phone_number[-8:]}_{get_random_string(4).lower()}"
+                else:
+                    user.username = email
+
+        # ✅ Fixed: Set password properly without calling non-existent super method
+        if password:
+            user.set_password(password)
+        else:
+            # Generate a random secure password for users without one (e.g., phone-auth)
+            random_password = get_random_string(20)
+            user.set_password(random_password)
+            
+        user.save(using=self._db)
+
+        # ✅ Decrease slots only if registration_group exists
+        if user.registration_group:
+            user.registration_group.decrease_slots()
+
+        return user
+    
+    
+    def create_superuser(self, email, password, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self.create_user(email, password, **extra_fields)
+
+
+    def generate_ole_username(self, email):
+        """Generate simple, unique username for ole students."""
+        base = email.split('@')[0].replace('.', '').replace('+', '')
+        suffix = get_random_string(4).upper()
+        username = f"ole_{base}_{suffix}"
+        
+        # Ensure uniqueness
+        counter = 1
+        base_username = username
+        while self.model.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+            
+        return username
+
+    def generate_username_from_group(self, group, role):
+        role_codes = {
+            "student": "S",
+            "teacher": "T",
+            "parent": "P",
+            "admin": "A",
+        }
+        role_code = role_codes.get(role, "X")  # Default to 'X' if role is not recognized
+
+        # Include state code, group serial number, user count, and year
+        state_code = group.state_code
+        group_serial = group.serial_prefix
+        year = str(group.date_registered.year)  # Extract year of registration
+        user_count = group.users.filter(role=role).count() + 1
+
+        # Construct the username in format: YEAR/ROLECODE-STATE/SerialNumber/Count
+        return f"{year}/{role_code}-{state_code}/{group_serial}/{str(user_count).zfill(3)}"
+
+    def generate_unique_username(self, role, group=None):
+        if group:
+            year = str(group.date_registered.year)
+            state_code = group.state_code.zfill(3)
+            group_code = group.serial_prefix.zfill(3)
+            type_code = "S" if group.group_type == "school" else "H"
+            prefix = f"{year}/{state_code}/{type_code}{group_code}/"
+
+            count = self.model.objects.filter(group=group, role=role).count() + 1
+            username = f"{prefix}{str(count).zfill(4)}"
+
+            while self.model.objects.filter(username=username).exists():
+                count += 1
+                username = f"{prefix}{str(count).zfill(4)}"
+            return username
+        else:
+            role_prefix = role.lower()
+            count = self.model.objects.filter(role=role).count() + 1
+            return f"{role_prefix}_{str(count).zfill(4)}"
+
+    # ✅ Removed the broken make_random_password method - using get_random_string instead
+
+
+# Custom User model
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    ROLE_CHOICES = (
+        ("admin", "Admin"),
+        ("teacher", "Teacher"),
+        ("student", "Student"),
+        ("parent", "Parent"),
+        ('ole_student', 'Ole Student'),  # ✅ New role
+    )
+
+    email = models.EmailField(unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    username = models.CharField(max_length=50, unique=True, blank=True)
+    full_name = models.CharField(max_length=100)
+    profile_photo = models.ImageField(upload_to="profile_photos/", null=True, blank=True)
+    date_joined = models.DateTimeField(default=timezone.now)
+    
+    # ✅ Phone number field for phone-based authentication
+    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
+
+    registration_group = models.ForeignKey(
+        "RegistrationGroup",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="users"
+    )
+
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    # ✅ OLE-specific fields
+    ole_class_level = models.ForeignKey(
+        "teachers.OleClassLevel", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="ole_students"
+    )
+    ole_subjects = models.ManyToManyField(
+        "teachers.OleSubject", blank=True, related_name="ole_students"
+    )
+
+    # ✅ Subscription support
+    subscription_expires_on = models.DateField(null=True, blank=True)
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["role", "full_name"]
+
+    objects = CustomUserManager()
+
+    class Meta:
+        indexes = [
+            # `role` is filtered on nearly every role-scoped query and permission
+            # check; without an index those become full table scans as the user
+            # count grows.
+            models.Index(fields=["role"], name="user_role_idx"),
+            # subscription sweeps / "is this user still active" checks.
+            models.Index(fields=["subscription_expires_on"], name="user_sub_expires_idx"),
+            # counting/listing users within a registration group.
+            models.Index(fields=["registration_group"], name="user_reg_group_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.username})"
+
+    def save(self, *args, **kwargs):
+        if self.role:
+            self.role = self.role.lower()
+        if not self.username:
+            # ✅ Allow save without username (will be auto-generated)
+            pass
+        super().save(*args, **kwargs)
+
+
+    def is_subscription_active(self):
+        # A user may simply have no subscription yet; the related-object access
+        # raises RelatedObjectDoesNotExist (a subclass of ObjectDoesNotExist).
+        # The previous code caught OleStudentSubscription.DoesNotExist by a name
+        # that wasn't imported here, so the guard itself raised NameError.
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            subscription = self.ole_subscription
+        except ObjectDoesNotExist:
+            return False
+        if not subscription or not subscription.end_date:
+            return False
+        return subscription.end_date >= timezone.now()
+
+
+class RegistrationGroup(models.Model):
+    ACCOUNT_TYPES = [
+        ('school', 'School'),
+        ('home', 'Home'),
+        ('referral', 'Referral'),
+    ]
+
+    BILLING_CYCLES = [
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly'),
+    ]
+
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default="school")
+    name = models.CharField(max_length=100, default="John Ken")
+    location = models.CharField(max_length=100, default="Ikeja")
+    state = models.CharField(max_length=100, default="Lagos")
+    email = models.EmailField(default="email@example.com")
+    slots_applied = models.PositiveIntegerField(default=1)
+    slots_remaining = models.PositiveIntegerField(default=1)
+    billing_cycle = models.CharField(max_length=20, choices=BILLING_CYCLES, default='monthly')  # ✅ enforced
+    subscription_expires = models.DateField(null=True, blank=True)  # ✅ New field
+    referral_code = models.CharField(max_length=50, blank=True)
+    account_details = models.TextField(blank=True, default="Not provided")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    state_code = models.CharField(max_length=10, blank=True)
+    serial_prefix = models.CharField(max_length=10, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.state_code and self.state:
+            self.state_code = self.state[:2].upper()
+        if not self.serial_prefix and self.account_type:
+            self.serial_prefix = self.account_type[:3].upper()
+        
+        # ✅ Ensure new subscriptions get 30 days validity if not set
+        if not self.subscription_expires:
+            self.subscription_expires = timezone.now().date() + timedelta(days=30)
+
+        super().save(*args, **kwargs)
+
+    def decrease_slots(self, count=1):
+        """
+        Atomically consume `count` slots.
+
+        The previous read-modify-write let two concurrent registrations both
+        read the last slot and both succeed — overselling. This locks the row
+        (select_for_update) inside a transaction so the check and decrement are
+        a single atomic step.
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            fresh = type(self).objects.select_for_update().get(pk=self.pk)
+            if fresh.slots_remaining < count:
+                raise ValueError("You don't have enough slots left, please buy more to continue")
+            fresh.slots_remaining -= count
+            fresh.save(update_fields=["slots_remaining"])
+            self.slots_remaining = fresh.slots_remaining
+
+    def __str__(self):
+        return f"{self.name} ({self.account_type}) - {self.slots_remaining} slots"
+    
+    
+    def is_subscription_active(self):
+        return self.subscription_expires and self.subscription_expires >= timezone.now().date()
+
+
+
+class StudentSlot(models.Model):
+    main_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_slots')
+    full_name = models.CharField(max_length=255)
+    email = models.EmailField()
+    username = models.CharField(max_length=100, unique=True)
+    # Bookkeeping table, not a login account. Kept blank; real credentials
+    # live on CustomUser (hashed). Column retained to avoid a destructive drop.
+    password = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.username} - {self.full_name}"
+
+
+
+class OleStudentProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ole_profile')
+    class_level = models.ForeignKey("teachers.OleClassLevel", on_delete=models.SET_NULL, null=True)
+    subjects = models.ManyToManyField("teachers.OleSubject")
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.class_level.name if self.class_level else 'No Class'}"
+
+
+
+class OleStudentSubscription(models.Model):
+    PLAN_CHOICES = (
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly'),
+    )
+
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='ole_subscription')
+    plan_type = models.CharField(max_length=10, choices=PLAN_CHOICES)
+    start_date = models.DateTimeField(auto_now_add=True)
+    end_date = models.DateTimeField()
+
+    def is_active(self):
+        return self.end_date >= timezone.now()
+
+    def __str__(self):
+        return f"{self.user.email} - {self.plan_type} (Expires: {self.end_date.date()})"
+    
+    
+class SubscriptionPlan(models.Model):
+    name = models.CharField(max_length=50)
+    duration_days = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return self.name
+    
+
+class OleStudentSubjectAccess(models.Model):
+    ole_student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    ole_class_level = models.ForeignKey("teachers.OleClassLevel", on_delete=models.CASCADE)
+    ole_subjects = models.ManyToManyField("teachers.OleSubject")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.ole_student.email} - {self.ole_class_level.name}"
+
+
+class AdminActionLog(models.Model):
+    ACTION_CHOICES = [
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('delete', 'Delete'),
+        ('login', 'Login'),
+        ('logout', 'Logout'),
+        ('other', 'Other'),
+    ]
+
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    email = models.EmailField()
+    details = models.TextField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Admin Action Log"
+        verbose_name_plural = "Admin Action Logs"
+
+    def __str__(self):
+        return f"{self.action_type} by {self.email} at {self.timestamp}"
+    
+
+class OlePaymentVerification(models.Model):
+    reference = models.CharField(max_length=100, unique=True, db_index=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.reference
+
+    class Meta:
+        verbose_name = "Payment Verification"
+        verbose_name_plural = "Payment Verifications"
+
+# Add to your existing models.py
+class VerificationCode(models.Model):
+    METHOD_CHOICES = (
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+    )
+    identifier = models.CharField(max_length=255, db_index=True)  # email or phone
+    code = models.CharField(max_length=6)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = str(random.randint(100000, 999999))
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=10)
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"{self.identifier} - {self.code} ({self.method})"
+
+    class Meta:
+        verbose_name = "Verification Code"
+        verbose_name_plural = "Verification Codes"
+        indexes = [
+            models.Index(fields=['identifier', 'method']),
+        ]
+</file>
+
+<file path="users/permissions.py">
+from rest_framework.permissions import BasePermission
+
+
+
+class IsStudentUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'student'
+
+class IsParentUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'parent'
+    
+class IsAdminUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'admin'
+
+class IsTeacherUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'teacher'
+
+class IsOleStudentUser(BasePermission):  # ✅ New role-specific permission
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'ole_student'
+</file>
+
+<file path="users/serializers.py">
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import RegistrationGroup
+from rest_framework import serializers
+from .models import CustomUser
+from django.core.mail import send_mail
+from django.conf import settings
+from .models import StudentSlot
+import secrets
+import string
+
+
+def generate_secure_password(length=10):
+    """A random, human-typable password. Ambiguous characters removed so the
+    emailed credential is easy to read and enter (no O/0, l/1, I)."""
+    alphabet = "".join(c for c in (string.ascii_letters + string.digits)
+                       if c not in "O0oIl1")
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from teachers.models import OleClassLevel, OleSubject, LiveClassSchedule, OleLesson, OleMaterial, LiveClassSession
+from users.models import CustomUser
+from users.models import OleStudentSubscription  # Adjust import path if needed
+from datetime import date
+from django.utils import timezone
+from .models import OleStudentProfile
+from django.contrib.auth import authenticate
+
+# Custom user serializer for registration
+from rest_framework import serializers
+from .models import CustomUser, RegistrationGroup
+
+from rest_framework import serializers
+from users.models import CustomUser, RegistrationGroup
+
+from django.core.mail import send_mail
+from django.conf import settings
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    registration_group = serializers.PrimaryKeyRelatedField(
+        queryset=RegistrationGroup.objects.all(),
+        required=True
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'full_name', 'role', 'registration_group', 'password']
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+
+    def create(self, validated_data):
+        group = validated_data.pop("registration_group")
+        role = validated_data.get("role")
+
+        # Step 1: Generate student serial number (e.g. 001)
+        total_registered = CustomUser.objects.filter(registration_group=group).count() + 1
+        user_serial = f"{total_registered:03d}"
+
+        # Step 2: Get state code and serial prefix from group
+        state_code = group.state_code.upper()  # e.g. "NG"
+        serial_prefix = group.serial_prefix.upper()  # e.g. "HOM"
+
+        # Step 3: Construct username
+        username = f"{state_code}/{serial_prefix}/{user_serial}"
+
+        # Step 4: Create user with a RANDOM password (never equal to the
+        # username — usernames are public and follow a predictable serial, so a
+        # username-as-password is effectively no password at all). The raw value
+        # is emailed once below and never persisted anywhere.
+        raw_password = generate_secure_password()
+        user = CustomUser.objects.create_user(
+            username=username,
+            registration_group=group,
+            **validated_data
+        )
+        user.set_password(raw_password)
+        user.save()
+
+        # Step 5: Reduce available slot
+        group.decrease_slots()
+
+        # Step 6: Send login details via email
+        subject = "Your iSchool Ola Login Details"
+        message = (
+            f"Hello {user.full_name},\n\n"
+            f"Thank you for registering with iSchool Ola.\n\n"
+            f"Your login credentials are:\n"
+            f"Username: {username}\n"
+            f"Password: {raw_password}\n\n"
+            f"Please keep these details safe and secure.\n\n"
+            f"iSchool Ola Team"
+        )
+
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+
+        return user
+
+
+# Serializer to handle login and JWT token generation
+class CustomTokenObtainPairSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+    def validate(self, attrs):
+        email = attrs.get('email')
+        password = attrs.get('password')
+
+        # Check if user exists and validate credentials
+        user = get_user_model().objects.filter(email=email).first()
+        if user is None:
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if not user.check_password(password):
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("This account has been deactivated.")
+
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+
+        return {
+            'refresh': str(refresh),
+            'access': str(access_token)
+        }
+    
+
+# users/serializers.py
+from rest_framework import serializers
+from .models import CustomUser, RegistrationGroup
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ("email", "password", "full_name", "role", "registration_group")
+
+    def validate(self, data):
+        if not data.get("registration_group"):
+            raise serializers.ValidationError("registration_group is required.")
+        return data
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = CustomUser.objects.create_user(password=password, **validated_data)
+        return user
+
+
+class StudentSlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentSlot
+        fields = ['id', 'main_user', 'full_name', 'email', 'username', 'created_at']
+        read_only_fields = ['username', 'main_user', 'created_at']
+        
+    
+class StudentDetailSerializer(serializers.Serializer):
+    fullName = serializers.CharField()
+    email = serializers.EmailField()
+
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token['registration_group'] = {
+            "id": user.registration_group.id,
+            "name": user.registration_group.name,
+            "email": user.registration_group.email,
+        } if hasattr(user, 'registration_group') else None
+        return token
+    
+
+OLE_PLAN_CHOICES = [
+    ('monthly', 'Monthly'),
+]
+
+class OleStudentRegistrationSerializer(serializers.Serializer):
+    full_name = serializers.CharField()
+    email = serializers.EmailField()
+    plan_type = serializers.ChoiceField(choices=OLE_PLAN_CHOICES)
+    class_level_id = serializers.IntegerField()
+    subject_ids = serializers.ListField(
+        child=serializers.IntegerField(), 
+        allow_empty=False,
+        help_text="List of subject IDs the student is registering for"
+    )
+
+    
+    def validate_email(self, value):
+        if CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate_class_level_id(self, value):
+        if not OleClassLevel.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Invalid class level selected.")
+        return value
+
+    def validate_subject_ids(self, value):
+        invalid_ids = [sid for sid in value if not OleSubject.objects.filter(id=sid).exists()]
+        if invalid_ids:
+            raise serializers.ValidationError(f"Invalid subject IDs: {invalid_ids}")
+        return value
+
+
+class OleStudentBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'first_name', 'last_name', 'email']
+
+
+class OleStudentSubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OleStudentSubscription
+        fields = ['plan_type', 'start_date', 'end_date', 'is_active']
+        read_only_fields = fields
+
+
+class OleStudentProfileSerializer(serializers.ModelSerializer):
+    class_level = serializers.StringRelatedField()
+    subjects = serializers.StringRelatedField(many=True)
+    subscription_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OleStudentProfile
+        fields = ['class_level', 'subjects', 'subscription_status']
+
+    def get_subscription_status(self, obj):
+        try:
+            subscription = OleStudentSubscription.objects.get(user=obj.user)
+            return {
+                "plan_type": subscription.plan_type,
+                "start_date": subscription.start_date,
+                "end_date": subscription.end_date,
+                "is_active": subscription.is_active,
+                "expires_in_days": (subscription.end_date - date.today()).days
+            }
+        except OleStudentSubscription.DoesNotExist:
+            return None
+        
+        
+
+class OleStudentDashboardSerializer(serializers.ModelSerializer):
+    class_level = serializers.CharField(source="ole_class_level.name", default="")
+    subjects = serializers.SlugRelatedField(
+        many=True,
+        source="ole_subjects",
+        read_only=True,
+        slug_field="name"
+    )
+    subscription_status = serializers.SerializerMethodField()
+    plan_type = serializers.SerializerMethodField()
+
+    def get_plan_type(self, obj):
+        try:
+            return obj.ole_subscription.plan_type
+        except OleStudentSubscription.DoesNotExist:
+            return None
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            'full_name',
+            'email',
+            'plan_type',
+            'class_level',
+            'subjects',
+            'subscription_status'
+        ]
+
+    def get_subscription_status(self, obj):
+        try:
+            sub = obj.ole_subscription
+            if not sub:
+                raise OleStudentSubscription.DoesNotExist
+
+            return {
+                "plan_type": sub.plan_type,
+                "is_active": sub.is_active() if callable(getattr(sub, "is_active", None)) else sub.end_date > timezone.now(),
+                "expires_in_days": (sub.end_date.date() - timezone.now().date()).days
+            }
+
+        except OleStudentSubscription.DoesNotExist:
+            return {
+                "plan_type": None,
+                "is_active": False,
+                "expires_in_days": -1
+            }
+        
+    
+class SubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OleSubject
+        fields = ['name']
+
+
+class ClassLevelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OleClassLevel
+        fields = ['name']
+
+
+class LiveClassScheduleDetailSerializer(serializers.ModelSerializer):
+    subject = serializers.SerializerMethodField()
+    class_level = ClassLevelSerializer()
+    teacher = serializers.SerializerMethodField()
+    meeting_link = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LiveClassSchedule
+        fields = [
+            "id", "subject", "class_level", "teacher",
+            "date", "start_time", "meeting_link"
+        ]
+
+    def get_subject(self, obj):
+        if obj.subject:
+            return {"name": obj.subject.name}
+        return None
+
+    def get_teacher(self, obj):
+        if obj.teacher:
+            return {"full_name": obj.teacher.full_name}
+        return None
+
+    def get_meeting_link(self, obj):
+        try:
+            return obj.liveclasssession.meeting_link
+        except LiveClassSession.DoesNotExist:
+            return None
+
+
+class LessonHistorySerializer(serializers.ModelSerializer):
+    subject = serializers.CharField(source="subject.name")
+    class_level = serializers.CharField(source="class_level.name")
+    teacher = serializers.CharField(source="teacher.full_name")
+    materials = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OleLesson
+        fields = ["id", "topic", "date", "start_time", "subject", "class_level", "teacher", "materials"]
+
+    def get_materials(self, obj):
+        return [{"title": m.title, "file_url": m.file.url if m.file else None} for m in obj.materials.all()]
+
+
+class OleMaterialSerializer(serializers.ModelSerializer):
+    subject = serializers.CharField(source="subject.name")
+    class_level = serializers.CharField(source="class_level.name")
+
+    class Meta:
+        model = OleMaterial
+        fields = ["id", "title", "description", "subject", "class_level", "file", "uploaded_at"]
+
+
+class TeacherEmailLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        email = data.get("email")
+        password = data.get("password")
+
+        if not email or not password:
+            raise serializers.ValidationError("Email and password are required.")
+
+        user = authenticate(username=email, password=password)
+
+        if user is None:
+            raise serializers.ValidationError("Invalid email or password.")
+
+        if user.role.lower() != "teacher":
+            raise serializers.ValidationError("Access denied. Not a teacher account.")
+
+        data["user"] = user
+        return data
+</file>
+
+<file path="users/signals.py">
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .models import CustomUser, OleStudentProfile
+
+@receiver(post_save, sender=CustomUser)
+def create_ole_student_profile(sender, instance, created, **kwargs):
+    if created and instance.role == "ole_student":
+        OleStudentProfile.objects.get_or_create(user=instance)
+</file>
+
+<file path="users/sms_services.py">
+# users/sms_service.py
+import africastalking
+import logging
+from django.conf import settings
+from django.core.mail import send_mail
+
+
+logger = logging.getLogger(__name__)
+
+# Initialize Africa's Talking
+africastalking.initialize(
+    username=settings.AFRICASTALKING_USERNAME,
+    api_key=settings.AFRICASTALKING_API_KEY
+)
+
+# Get the SMS service
+sms = africastalking.SMS
+
+def format_phone_for_sms(phone_number):
+    """
+    Normalise a Nigerian number to E.164 (+234XXXXXXXXXX).
+
+    A valid Nigerian mobile is the country code 234 followed by a 10-digit
+    subscriber number that starts with a 7/8/9 (e.g. 803..., 703..., 913...).
+    Locally people write it as 0803... (11 digits). This strips spaces, dashes,
+    and any leading 0 / +234 / 234, then validates the result — returning None
+    for anything that isn't a real 10-digit subscriber number, so we never hand
+    Africa's Talking an InvalidPhoneNumber.
+    """
+    if not phone_number:
+        return None
+
+    # Keep digits only (drops spaces, dashes, parentheses, leading +).
+    digits = "".join(ch for ch in str(phone_number) if ch.isdigit())
+
+    # Peel off whichever country/trunk prefix is present, leaving 10 subscriber digits.
+    if digits.startswith("234") and len(digits) == 13:
+        subscriber = digits[3:]
+    elif digits.startswith("0") and len(digits) == 11:
+        subscriber = digits[1:]
+    elif len(digits) == 10:
+        subscriber = digits
+    else:
+        return None  # not a recognisable NG mobile
+
+    # Nigerian mobile subscriber numbers start 7, 8, or 9.
+    if len(subscriber) != 10 or subscriber[0] not in "789":
+        return None
+
+    return "+234" + subscriber
+
+def send_sms(phone_number, code):
+    formatted_phone = format_phone_for_sms(phone_number)
+    if not formatted_phone:
+        logger.error("Rejecting invalid phone number before send: %r", phone_number)
+        return False
+    
+    is_test_mode = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
+    
+    if is_test_mode:
+        # Sandbox never delivers real SMS. Log at debug so the code is visible in
+        # local dev but not in production logs (which run at INFO+).
+        logger.debug("SANDBOX SMS to %s: code %s", formatted_phone, code)
+        return True
+    
+    try:
+        message = f"Your iSchool verification code is {code}. Valid for 10 minutes, one-time use only."
+        
+        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
+        
+        logger.info("Sending SMS via Africa's Talking to %s", formatted_phone)
+
+
+
+        
+        # Use enqueue parameter to bypass DND
+        options = {
+            "message": message,
+            "recipients": [formatted_phone],
+            "enqueue": True  # ✅ This helps bypass DND for transactional messages
+        }
+        
+        if sender_id:
+            options["sender_id"] = sender_id
+        
+        response = sms.send(**options)
+        
+        logger.debug("AT response received")
+        logger.info(f"SMS sent to {formatted_phone}: {response}")
+        
+        if response and isinstance(response, dict):
+            recipients = response.get('SMSMessageData', {}).get('Recipients', [])
+            if recipients:
+                recipient = recipients[0]
+                status = recipient.get('status')
+                if status == 'Success':
+                    message_id = recipient.get('messageId')
+                    logger.info("SMS sent, id=%s", message_id)
+                    return True
+                else:
+                    reason = f"{status} (code: {recipient.get('statusCode')})"
+                    logger.error("SMS rejected by Africa's Talking for %s: %s", formatted_phone, reason)
+                    return False
+            logger.error("SMS: no recipients in AT response for %s: %s", formatted_phone, response)
+        return False
+
+    except Exception as e:
+        # Common causes: exhausted AT credit, unregistered/!approved sender ID,
+        # invalid API key, or account still in sandbox. Surface it in logs.
+        logger.error("SMS send failed for %s: %s", formatted_phone, e, exc_info=True)
+        return False
+    
+
+def send_sms_auto_fallback(phone_number, code):
+    formatted_phone = format_phone_for_sms(phone_number)
+    if not formatted_phone:
+        logger.error("Rejecting invalid phone number before send: %r", phone_number)
+        return False
+    
+    if getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox':
+        return send_sms(phone_number, code)
+    
+    try:
+        message = f"Your iSchool verification code is {code}. Valid for 10 minutes."
+        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
+        
+        logger.info("Sending SMS to %s", formatted_phone)
+        
+        options = {
+            "message": message,
+            "recipients": [formatted_phone],
+            "enqueue": True
+        }
+        
+        if sender_id:
+            options["sender_id"] = sender_id
+        
+        response = sms.send(**options)
+        
+        logger.debug("AT API response received")
+        
+        if response and isinstance(response, dict):
+            recipients = response.get('SMSMessageData', {}).get('Recipients', [])
+            if recipients:
+                status = recipients[0].get('status')
+                if status == 'Success':
+                    return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error("SMS error: %s", e, exc_info=True)
+        return False
+
+def send_email_code(email, code):
+    """Send OTP code via email."""
+    subject = "Your iSchool verification code"
+    message = f"Your iSchool verification code is {code}. It expires in 10 minutes."
+    from_email = settings.DEFAULT_FROM_EMAIL
+    try:
+        send_mail(subject, message, from_email, [email], fail_silently=False)
+        return True
+    except Exception as e:
+        logger.error(f"Email send failed for {email}: {e}")
+        return False
+</file>
+
+<file path="users/tests.py">
+from django.test import TestCase
+
+# Create your tests here.
+</file>
+
+<file path="users/urls.py">
+from django.urls import path
+from .views import create_student_slots
+from .views import (UserRegistrationView, 
+                    OleStudentLoginView, OleStudentDashboardView,
+                    StudentLoginView, 
+                    VerifyOleStudentPaymentView, 
+                    OleStudentRegistrationView, 
+                    AdminOnlyView, UserMeView, 
+                    TeacherOnlyView,CustomTokenObtainPairView, 
+                    RegistrationGroupView, TeacherTestManagementView, 
+                    StudentResultsView, ParentResultsView, StudentRegistrationView, CustomLoginView,
+                    get_student_lesson_detail, OleStudentLessonHistoryView, OleStudentMaterialListView, 
+                    RenewSubscriptionAPIView, SubscriptionPlanListAPIView, initialize_subscription_payment, 
+                    verify_payment, log_student_join, log_student_leave, check_verification_status)
+# urls.py
+from rest_framework_simplejwt.views import TokenObtainPairView
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from dj_rest_auth.views import LoginView
+from . import views
+
+
+urlpatterns = [
+    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+]
+
+app_name = 'users'
+
+urlpatterns = [
+
+    # User registration endpoint
+    path("register/", UserRegistrationView.as_view(), name="user-register"),
+
+    path("register/", StudentRegistrationView.as_view(), name="register"),
+
+    path("login/", CustomLoginView.as_view(), name="login"),
+    
+    # Login endpoint (JWT token generation)
+    path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    
+    # Registration group (School/Home/Referral) creation
+    path('create-group/', RegistrationGroupView.as_view(), name='create-group'),
+    
+    # Teacher test management (restricted to teachers)
+    path('teacher/tests/', TeacherTestManagementView.as_view(), name='teacher-tests'),
+    
+    # Student results (restricted to students)
+    path('student/results/', StudentResultsView.as_view(), name='student-results'),
+    
+    # Parent results (restricted to parents)
+    path('parent/results/', ParentResultsView.as_view(), name='parent-results'),
+
+    path("auth/login/", StudentLoginView.as_view(), name="student-login"),
+
+    path('student-slots/', create_student_slots, name='create-student-slots'),
+
+    path("admin-only/", AdminOnlyView.as_view(), name="admin_only"),
+
+    path("teacher-only/", TeacherOnlyView.as_view(), name="teacher_only"),
+
+    path("me/", UserMeView.as_view(), name="me"),  # 👈 Add this line
+
+    path("ole-student/register/", OleStudentRegistrationView.as_view(), name="ole_student_register"),
+
+    path("ole-student/verify-payment/", VerifyOleStudentPaymentView.as_view(), name="ole-payment-verify"),
+
+    path('ole-student/login/', OleStudentLoginView.as_view(), name='ole_student_login'),
+    path("ole-student/dashboard/", OleStudentDashboardView.as_view(), name="ole-student-dashboard"),
+    path("ole-student/lesson/<int:id>/", get_student_lesson_detail, name="lesson-detail"),
+    path("ole-student/lesson-history/", OleStudentLessonHistoryView.as_view(), name="ole_lesson_history"),
+    path("ole-student/materials/", OleStudentMaterialListView.as_view(), name="ole_student_materials"),
+    path("ole-student/renew-subscription/", RenewSubscriptionAPIView.as_view(), name="renew_subscription"),
+    path("ole-student/subscription-plans/", SubscriptionPlanListAPIView.as_view(), name="subscription_plans"),
+    path("ole-student/init-subscription-payment/", initialize_subscription_payment, name="init_subscription_payment"),
+    path("ole-student/verify-subscription-payment/", verify_payment, name="verify_subscription_payment"),  # ✅ ADD THIS
+    path('log-join/', log_student_join, name='log_student_join'),
+    path('log-leave/', log_student_leave, name='log_student_leave'),
+    path('auth/token/', LoginView.as_view(), name='rest_login'),  # or dj-rest-auth login
+
+    path('phone/send-code/', views.send_verification_code, name='send-code'),
+    path('phone/verify-code/', views.verify_code, name='verify-code'),
+    path('phone/check-verification/', views.check_verification_status, name='check-verification'),
+    path('', views.api_root, name='api-root'),  # Add this for /api/users/
+
+    # Phone Login Logout System
+    path('phone/login/', views.login_or_register, name='phone-login'),
+    path('phone/logout/', views.phone_logout, name='phone-logout'),
+    path('profile/', views.get_user_profile, name='user-profile'),
+]
+</file>
+
+<file path="users/utils.py">
+from django.core.mail import send_mail
+from django.conf import settings
+
+from .models import CustomUser, StudentSlot
+from .serializers import generate_secure_password
+
+
+def assign_main_user_and_slots(user, num_slots):
+    """
+    Give the paying user their login credentials and create their student slots.
+
+    NOTE: this previously referenced StudentSlot fields that don't exist
+    (`parent`, `student_username`), so it raised TypeError on every call — the
+    exception was swallowed by the caller's try/except and surfaced as a generic
+    500 after payment. Fields corrected to the real model, and passwords are now
+    random (never equal to the username).
+    """
+    state_code = getattr(user, "state_code", None) or "000"
+    prefix = "S" if getattr(user, "registration_type", None) == "school" else "H"
+    base_username = f"{state_code}/{prefix}{user.id:03}/000"
+
+    # Give the main account a real, random password and email it once.
+    raw_password = generate_secure_password()
+    user.username = base_username
+    user.set_password(raw_password)
+    user.save()
+
+    send_mail(
+        subject="Your iSchool Ola Login Details",
+        message=(
+            f"Hello {user.full_name},\n\n"
+            f"Your account is ready.\n\n"
+            f"Username: {base_username}\n"
+            f"Password: {raw_password}\n\n"
+            f"Please keep these safe.\n\niSchool Ola Team"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+    # Create the student slots (bookkeeping only — not login accounts, so no
+    # usable password is stored on them).
+    for i in range(1, num_slots + 1):
+        serial = f"{i:03}"
+        student_username = base_username[:-3] + serial
+        StudentSlot.objects.create(
+            main_user=user,
+            full_name=user.full_name,
+            email=user.email,
+            username=student_username,
+            password="",
+        )
+</file>
+
+<file path="users/views.py">
+from rest_framework import status, permissions
+from django.utils.crypto import get_random_string
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
+import re
+from .sms_services import send_email_code, send_sms_auto_fallback
+from .serializers import (UserRegistrationSerializer, 
+                          CustomTokenObtainPairSerializer, OleStudentRegistrationSerializer, 
+                          OleStudentDashboardSerializer)
+
+from .models import RegistrationGroup, OlePaymentVerification
+from .permissions import  IsTeacherUser, IsStudentUser, IsParentUser, IsAdminUser, IsOleStudentUser
+from .serializers import CustomUserSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from rest_framework.permissions import IsAuthenticated
+from .models import StudentSlot
+from .serializers import StudentSlotSerializer
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth import get_user_model
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
+from django.conf import settings
+from dj_rest_auth.views import LoginView
+from emails.sendgrid_email import send_email
+from datetime import timedelta
+from .models import OleStudentSubjectAccess, AdminActionLog 
+from django.utils import timezone
+from users.models import OleStudentSubscription, OleStudentProfile, SubscriptionPlan
+from .serializers import OleStudentProfileSerializer
+from rest_framework.authentication import TokenAuthentication
+import requests
+from teachers.models import OleClassLevel, OleSubject, OleStudentMatch, LiveClassSchedule, OleMaterial, OleLesson, AttendanceLog
+from django.shortcuts import get_object_or_404
+from .serializers import (
+    UserRegistrationSerializer,
+    MyTokenObtainPairSerializer, LiveClassScheduleDetailSerializer, LessonHistorySerializer, OleMaterialSerializer
+)
+import json
+import random
+import uuid
+import string
+from django.db import IntegrityError  # Make sure this is imported at the top
+from django.core.mail import send_mail
+from django.contrib import messages
+from django.db import IntegrityError, transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.decorators import api_view
+from .models import PhoneVerification
+from .sms_services import send_sms
+import logging
+import threading
+from django.core.cache import cache
+from django.http import JsonResponse
+
+
+
+User = get_user_model()
+
+
+logger = logging.getLogger(__name__)
+
+from rest_framework.throttling import SimpleRateThrottle, AnonRateThrottle
+from rest_framework.decorators import throttle_classes
+
+
+class OTPRateThrottle(AnonRateThrottle):
+    """Tight limit on OTP sends — each SMS costs money and codes are guessable."""
+    scope = "otp"
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
+
+
+class RegisterRateThrottle(AnonRateThrottle):
+    scope = "register"
+
+
+
+
+def generate_password(length=8):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+from users.models import CustomUser  # adjust import as needed
+
+User = get_user_model()
+username = f"ole_{uuid.uuid4().hex[:8]}"
+
+# User Registration View
+class UserRegistrationView(generics.CreateAPIView):
+    serializer_class = CustomUserSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                "success": True,
+                "message": "User registered successfully.",
+                "data": CustomUserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+        return Response({"success": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+   
+
+# Token Authentication View (Login)
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
+
+# Registration Group Creation (For Schools/Homes/Referrals)
+class RegistrationGroupView(APIView):
+    permission_classes = [IsAdminUser]  # Only admins can create groups
+
+    def post(self, request):
+        group_type = request.data.get('group_type')
+        state = request.data.get('state')
+        slots_applied = request.data.get('slots_applied')
+        proof_of_payment = request.data.get('proof_of_payment')
+
+        # Create a new registration group
+        group = RegistrationGroup.objects.create(
+            group_type=group_type,
+            state=state,
+            slots_applied=slots_applied,
+            slots_remaining=slots_applied,  # Initial remaining slots set to slots applied
+            proof_of_payment=proof_of_payment,
+        )
+
+        return Response({"message": f"{group_type.capitalize()} registered successfully", "group_id": group.id}, status=status.HTTP_201_CREATED)
+
+# Example of Teacher View
+class TeacherTestManagementView(APIView):
+    permission_classes = [IsTeacherUser]  # Only teachers can manage tests
+
+    def get(self, request):
+        # Example action: Get tests assigned to the teacher
+        # Logic for getting tests goes here
+        return Response({"message": "Tests for Teacher"}, status=status.HTTP_200_OK)
+
+# Example of Student View
+class StudentResultsView(APIView):
+    permission_classes = [IsStudentUser]  # Only students can view their results
+
+    def get(self, request):
+        # Example action: Get student's results
+        # Logic for getting results goes here
+        return Response({"message": "Student results"}, status=status.HTTP_200_OK)
+    
+
+
+class StudentLoginView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get("username")
+        password = request.data.get("password")
+
+        if not username or not password:
+            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Authenticate using username
+        try:
+            user_obj = CustomUser.objects.get(username=username)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = authenticate(request, username=user_obj.email, password=password)  # using email internally
+
+        if user is not None:
+            if user.role.lower() != "student":
+                return Response({"error": "User is not a student."}, status=status.HTTP_403_FORBIDDEN)
+
+            # ✅ Check subscription status
+            if user.registration_group and not user.registration_group.is_subscription_active():
+                return Response(
+                    {"detail": "Your subscription has expired. Please buy slots again to continue."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # ✅ Generate tokens
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "role": user.role,
+                "user_id": user.id
+            }, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_student_slots(request):
+    data = request.data.get('students', [])
+    created_slots = []
+
+    # Prefix example: 001/S001/
+    user_prefix = request.user.username[:-3]  # remove last 3 digits
+
+    current_count = StudentSlot.objects.filter(main_user=request.user).count()
+
+    for index, student in enumerate(data):
+        serial_number = str(current_count + index + 1).zfill(3)
+        username = f"{user_prefix}{serial_number}"
+        slot = StudentSlot.objects.create(
+            main_user=request.user,
+            full_name=student.get('full_name'),
+            email=student.get('email'),
+            username=username,
+            # StudentSlot is bookkeeping only — it is NOT a login account (those
+            # are CustomUser, hashed). No usable password is stored here.
+            password="",
+        )
+        created_slots.append(StudentSlotSerializer(slot).data)
+
+    return Response({'slots': created_slots}, status=status.HTTP_201_CREATED)
+
+
+class AdminOnlyView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"message": "Hello Admin!"})
+
+
+class TeacherOnlyView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsTeacherUser]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"message": "Hello Teacher!"})
+
+
+# 1. Student Registration View
+class StudentRegistrationView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+
+
+# 2. Custom JWT Login View
+class CustomLoginView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
+
+
+class UserMeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = CustomUserSerializer(request.user)
+        return Response(serializer.data)
+
+
+
+class OleStudentRegistrationView(APIView):
+    throttle_classes = [RegisterRateThrottle]
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = OleStudentRegistrationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower()
+        full_name = serializer.validated_data["full_name"]
+        plan_type = serializer.validated_data["plan_type"]
+        class_level_id = serializer.validated_data["class_level_id"]
+        subject_ids = serializer.validated_data["subject_ids"]
+
+        AdminActionLog.objects.create(
+            action_type="registration_attempt",
+            email=email,
+            details=f"Attempting registration with plan: {plan_type}, class_level_id: {class_level_id}",
+        )
+
+        try:
+            class_level = OleClassLevel.objects.get(id=class_level_id)
+            if not subject_ids:
+                return Response({"detail": "No subjects selected."}, status=400)
+
+            subjects = OleSubject.objects.filter(id__in=subject_ids)
+            if not subjects.exists():
+                return Response({"detail": "Invalid subject selection."}, status=400)
+
+        except OleClassLevel.DoesNotExist:
+            return Response({"detail": "Invalid class level selected."}, status=400)
+
+        # ✅ DO NOT create user here anymore — let payment verification handle it
+
+        # OLE currently offers the monthly plan only. plan_type is captured for
+        # future use but the plan/amount are resolved from the monthly config.
+        plan_id = settings.PAYSTACK_PLAN_IDS.get("monthly")
+        amount = settings.PAYSTACK_PLAN_AMOUNTS.get("monthly")
+
+        if not plan_id or not amount:
+            logger.error(
+                "OLE plan misconfigured: plan_id=%r amount=%r. Check "
+                "PAYSTACK_PLAN_IDS/PAYSTACK_PLAN_AMOUNTS in settings.",
+                plan_id, amount,
+            )
+            return Response(
+                {"error": "Subscription plan is not configured. Please contact support."},
+                status=500,
+            )
+
+        # ✅ Decide callback URL
+        is_mobile = request.data.get("is_mobile", False)
+        if is_mobile:
+            callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"  # 👈 deep link back to mobile app
+        else:
+            callback_url = settings.OLE_PAYMENT_CALLBACK_URL  # 👈 default (web)
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "email": email,
+            "amount": amount,
+            "plan": plan_id,
+            "callback_url": callback_url,
+            "metadata": {
+                "full_name": full_name,
+                "email": email,
+                "plan_type": plan_type,
+                "is_ole_student": True,
+                "class_level_id": class_level_id,
+                "subject_ids": subject_ids,
+                "is_mobile": is_mobile,  # 👈 tracked for debugging
+            },
+        }
+
+        logger.debug("Paystack init payload prepared for %s", email)
+
+        try:
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                json=data,
+                headers=headers
+            )
+            result = response.json()
+        except Exception as e:
+            AdminActionLog.objects.create(
+                action_type="error",
+                email=email,
+                details=f"Paystack error: {str(e)}"
+            )
+            return Response({"error": "Could not reach Paystack."}, status=502)
+
+        if response.status_code == 200 and result.get("status") and result.get("data"):
+            AdminActionLog.objects.create(
+                action_type="payment_initialized",
+                email=email,
+                details="Payment initialized successfully with Paystack."
+            )
+            return Response({"authorization_url": result["data"]["authorization_url"]}, status=200)
+
+        paystack_message = result.get("message", "Unknown error")
+        # "Plan not found" here means the configured PAYSTACK_PLAN_IDS['monthly']
+        # does not exist in the Paystack account tied to the current secret key
+        # (usually a test-vs-live key/plan mismatch, or a deleted plan).
+        logger.error(
+            "Paystack init failed for %s. plan_id=%s message=%r",
+            email, plan_id, paystack_message,
+        )
+        AdminActionLog.objects.create(
+            action_type="error",
+            email=email,
+            details=f"Paystack init failed (plan_id={plan_id}): {paystack_message}"
+        )
+        user_message = (
+            "We could not start your payment. Please try again shortly, or "
+            "contact support if this continues."
+        )
+        return Response({"error": user_message, "gateway_message": paystack_message}, status=400)
+
+
+
+class VerifyOleStudentPaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        logger.info("=== VERIFY OLE STUDENT PAYMENT CALLED ===")
+
+        reference = request.data.get("reference")
+        if not reference:
+            logger.info("❌ Missing reference in request.")
+            return Response({"error": "Missing reference."}, status=400)
+        
+        # ✅ FINAL FIX: Use a database transaction for an atomic and persistent idempotency check.
+        try:
+            # Attempt to create a new record. This will fail if the reference already exists
+            # due to the 'unique=True' constraint on the PaymentVerification model.
+            OlePaymentVerification.objects.create(reference=reference)
+            logger.info(f"✅ Created new verification record for: {reference}")
+        except IntegrityError:
+            # If the record already exists, catch the error and immediately return a success response.
+            logger.warning(f"⚠️ Duplicate verification attempt for {reference} (DB check).")
+            return Response(
+                {"status": "duplicate", "message": "Payment already processed."},
+                status=200
+            )
+
+        logger.info(f"🔍 Verifying payment with reference: {reference}")
+        verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+        }
+
+        try:
+            response = requests.get(verify_url, headers=headers)
+            result = response.json()
+            logger.info(f"✅ PAYSTACK VERIFY RESULT: {json.dumps(result, indent=2)}")
+        except Exception as e:
+            logger.info(f"❌ Error contacting Paystack: {str(e)}")
+            # Consider rolling back the PaymentVerification creation if Paystack is unavailable
+            # to allow for a future retry, though this adds complexity.
+            return Response({"error": "Verification service unavailable."}, status=502)
+
+        if not (result.get("status") and result["data"].get("status") == "success"):
+            logger.info("❌ Payment verification failed or incomplete.")
+            return Response({"error": "Payment verification failed or incomplete."}, status=400)
+
+        metadata = result["data"].get("metadata", {})
+        logger.info(f"📦 Extracted Metadata: {json.dumps(metadata, indent=2)}")
+
+        email = metadata.get("email", "").strip().lower()
+        full_name = metadata.get("full_name")
+        plan_type = metadata.get("plan_type")
+        class_level_id = metadata.get("class_level_id")
+        subject_ids = metadata.get("subject_ids", [])
+
+        if not email or not full_name or not plan_type or not class_level_id:
+            logger.info(f"❌ Incomplete metadata from Paystack: {metadata}")
+            return Response({"error": "Incomplete metadata from Paystack."}, status=400)
+
+        logger.info(f"👤 Normalized Email: {email}")
+
+        user = CustomUser.objects.filter(email=email).first()
+        new_user_created = False
+        password = None
+
+        if user:
+            logger.info(f"🔍 Found existing user: {email}")
+            if user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists():
+                logger.info("✅ Existing user is fully registered.")
+                # The frontend will receive the same 200 OK response with the same message and data.
+                return Response({
+                    "message": "Payment verified. Your account is already active.",
+                    "email": user.email,
+                    "temporary_password": None,
+                    "role": user.role
+                }, status=200)
+            else:
+                logger.info("⚠️ Existing user is incomplete. Proceeding to complete setup.")
+        else:
+            logger.info("🆕 Creating new user...")
+            password = get_random_string(8)
+            try:
+                user = CustomUser.objects.create_user(
+                    email=email,
+                    full_name=full_name,
+                    role="ole_student",
+                    password=password,
+                    is_active=True,
+                )
+                new_user_created = True
+                logger.info(f"✅ User created: {user.email}")
+            except IntegrityError as e:
+                logger.info(f"❌ IntegrityError during user creation: {e}")
+                return Response({
+                    "error": "User creation failed — possibly due to duplicate or bad data."
+                }, status=400)
+            except Exception as e:
+                logger.info(f"❌ Unexpected error during user creation: {e}")
+                return Response({
+                    "error": f"Unexpected error during user creation: {str(e)}"
+                }, status=500)
+
+        # Step: Assign class and subjects
+        try:
+            class_level = OleClassLevel.objects.get(id=class_level_id)
+            subjects = OleSubject.objects.filter(id__in=subject_ids)
+            user.ole_class_level = class_level
+            user.save()
+            user.ole_subjects.set(subjects)
+            logger.info("✅ Class level and subjects assigned.")
+        except Exception as e:
+            logger.info(f"❌ Error assigning class/subjects: {e}")
+            return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
+
+        # Step: Create subscription
+        try:
+            now = timezone.now()
+            duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
+            OleStudentSubscription.objects.create(
+                user=user,
+                plan_type=plan_type,
+                end_date=now + duration
+            )
+            logger.info("✅ Subscription created successfully.")
+        except Exception as e:
+            logger.info(f"❌ Subscription creation failed: {e}")
+            return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
+
+        # Step: Send welcome email (non-blocking)
+        def send_async_email(subject, message, recipient):
+            def _send():
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        "noreply@ischool.ng",
+                        [recipient],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Async email send failed: {e}")
+            threading.Thread(target=_send, daemon=True).start()
+
+        welcome_subject = "Welcome to iSchool Ole!"
+        welcome_message = f"""
+        Hello {full_name},
+
+        Your iSchool Ole account has been successfully created.
+
+        Login Details:
+        Email: {email}
+        Password: {password or '[already set]'}
+
+        Visit: https://www.ischool.ng/ole-student/login
+
+        Best regards,  
+        iSchool Ole Team
+        """
+
+        send_async_email(welcome_subject, welcome_message, email)
+        logger.info(f"📨 Welcome email queued for: {email}")
+
+        # The frontend will receive the same response body and status codes.
+        return Response({
+            "message": (
+                "Payment verified and account created."
+                if new_user_created
+                else "Account completed successfully. Please copy your email and Password to login"
+            ),
+            "email": email,
+            "temporary_password": password if new_user_created else None,
+            "role": "ole_student",
+        }, status=201 if new_user_created else 200)
+
+
+class OleStudentLoginView(LoginView):
+    """
+    Custom login view that only allows users with the role 'ole_student' to log in.
+
+    - Uses dj-rest-auth's LoginView for authentication.
+    - After authentication, checks the user's role.
+    - Denies access if the user is not an 'ole_student'.
+    """
+
+    def post(self, request, *args, **kwargs):
+        # Authenticate using built-in LoginView logic
+        response = super().post(request, *args, **kwargs)
+
+        # Get the authenticated user
+        user = self.user
+
+        # If user exists but is not an ole_student → deny access
+        if user and user.role != "ole_student":
+            return Response(
+                {"error": "Access denied. You are not registered as an Ole Student."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # If ole_student, return the original login response (includes token)
+        return response
+
+        
+
+class OleStudentDashboardView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # ✅ Handle AnonymousUser gracefully
+        if user.is_anonymous:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # ✅ Check if user has correct role
+        if user.role != "ole_student":
+            return Response({"error": "Access denied. Only Ole Students can access this view."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = OleStudentDashboardSerializer(user)
+        return Response(serializer.data, status=200)
+    
+
+# Example of Parent View
+class ParentResultsView(APIView):
+    permission_classes = [IsParentUser]  # Only parents can view their child's results
+
+    def get(self, request):
+        # Example action: Get child's results (assuming parent is related to student)
+        # Logic for getting child's results goes here
+        return Response({"message": "Parent's view of child's results"}, status=status.HTTP_200_OK)
+    
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_student_lesson_detail(request, id):
+    user = request.user
+
+    try:
+        match = OleStudentMatch.objects.get(student=user, schedule_id=id)
+    except OleStudentMatch.DoesNotExist:
+        return Response({"error": "Not matched to this lesson."}, status=403)
+
+    if not user.is_subscription_active():
+        return Response({"error": "Inactive subscription. Please renew to access this lesson."}, status=403)
+
+    lesson = get_object_or_404(LiveClassSchedule, id=id)
+    serializer = LiveClassScheduleDetailSerializer(lesson)
+    return Response(serializer.data)
+
+
+
+class OleStudentLessonHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if user.role != "ole_student":
+            return Response({"error": "Unauthorized"}, status=403)
+        
+        if not user.is_subscription_active():
+            return Response(
+                {"detail": "Your subscription has expired. Please renew to continue."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        lessons = OleLesson.objects.filter(
+            class_level=user.ole_class_level,
+            subject__in=user.ole_subjects.all(),
+            date__lt=timezone.now().date()
+        ).order_by("-date")
+
+        serializer = LessonHistorySerializer(lessons, many=True)
+        return Response(serializer.data)
+
+
+class OleStudentMaterialListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if not user.is_subscription_active():
+            return Response(
+                {"detail": "Your subscription has expired. Please renew to continue."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if user.role != "ole_student":
+            return Response({"error": "Unauthorized"}, status=403)
+
+        materials = (
+            OleMaterial.objects
+            .filter(
+                class_level=user.ole_class_level,
+                subject__in=user.ole_subjects.all(),
+            )
+            .select_related("subject", "class_level")  # serializer renders both
+            .order_by("-uploaded_at")
+        )
+
+        serializer = OleMaterialSerializer(materials, many=True)
+        return Response(serializer.data)
+
+
+class RenewSubscriptionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        plan_id = request.data.get("plan_id")
+
+        if not plan_id:
+            return Response({"error": "Plan ID is required."}, status=400)
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response({"error": "Invalid subscription plan."}, status=404)
+
+        now = timezone.now().date()  # Use `.date()` to match the model field type
+
+        # Extend or set the subscription expiration correctly
+        if user.subscription_expires_on and user.subscription_expires_on >= now:
+            user.subscription_expires_on += timedelta(days=plan.duration_days)
+        else:
+            user.subscription_expires_on = now + timedelta(days=plan.duration_days)
+
+        user.save()
+        return Response({
+            "message": "Subscription renewed successfully.",
+            "expires_on": user.subscription_expires_on
+        })
+
+# views.py
+class SubscriptionPlanListAPIView(APIView):
+    def get(self, request):
+        plans = SubscriptionPlan.objects.all().values('id', 'name', 'price', 'duration_days')
+        return Response(plans)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def initialize_subscription_payment(request):
+    user = request.user
+    plan = {
+        "id": 1,
+        "name": "Monthly Access",
+        "price": 5000,  # NGN
+        "duration_days": 30
+    }
+
+    reference = f"SUB-{uuid.uuid4().hex[:10].upper()}"
+
+    # ✅ Mobile clients must be sent to the API callback, which responds with a
+    # redirect into the app (ischoolmobile://payment-callback?...). The web
+    # callback is a plain website and strands mobile users in the browser.
+    is_mobile = request.data.get("is_mobile", False)
+    if is_mobile:
+        callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"
+    else:
+        callback_url = settings.OLE_PAYMENT_CALLBACK_URL
+
+    paystack_payload = {
+        "reference": reference,
+        "amount": plan["price"] * 100,  # Kobo
+        "email": user.email,
+        "callback_url": callback_url,
+        "metadata": {
+            "user_id": user.id,
+            "plan_id": plan["id"],
+            "plan_name": plan["name"],
+            "duration_days": plan["duration_days"],
+            "is_mobile": is_mobile
+        }
+    }
+    return Response(paystack_payload)@api_view(["POST"])
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_payment(request):
+    reference = request.data.get("reference")
+    if not reference:
+        return Response({"error": "Transaction reference is required."}, status=400)
+
+    headers = {
+        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+    }
+
+    verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
+
+    try:
+        paystack_response = requests.get(verify_url, headers=headers)
+        result = paystack_response.json()
+
+        if result["status"] is not True:
+            return Response({"error": "Payment verification failed."}, status=400)
+
+        data = result["data"]
+        if data["status"] != "success":
+            return Response({"error": "Payment was not successful."}, status=400)
+
+        metadata = data.get("metadata", {})
+        user_id = metadata.get("user_id")
+        plan_id = metadata.get("plan_id")
+
+        # Safety check
+        if user_id != request.user.id:
+            return Response({"error": "User mismatch."}, status=403)
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response({"error": "Subscription plan not found."}, status=404)
+
+        user = request.user
+        now = timezone.now()
+        if user.subscription_expiry and user.subscription_expiry > now:
+            user.subscription_expiry += timedelta(days=plan.duration_days)
+        else:
+            user.subscription_expiry = now + timedelta(days=plan.duration_days)
+
+        user.plan_type = plan.name  # Optional: track what plan they're on
+        user.save()
+
+        return Response({"message": "Subscription renewed successfully.", "expires_on": user.subscription_expiry})
+
+    except requests.RequestException:
+        return Response({"error": "Error contacting Paystack."}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def log_student_join(request):
+    session_id = request.data.get("session_id")
+    user = request.user
+
+    if AttendanceLog.objects.filter(session_id=session_id, student=user).exists():
+        return Response({"detail": "Already logged."})
+
+    log = AttendanceLog.objects.create(session_id=session_id, student=user)
+    return Response({"attendance_id": log.id})
+
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def log_student_leave(request):
+    session_id = request.data.get("session_id")
+    user = request.user
+
+    try:
+        log = AttendanceLog.objects.get(session_id=session_id, student=user)
+        log.left_at = timezone.now()
+        log.save()
+        return Response({"detail": "Left time logged."})
+    except AttendanceLog.DoesNotExist:
+        return Response({"detail": "Attendance not found."}, status=404)
+
+def format_phone_number(phone):
+    """
+    Canonical NG number as 234XXXXXXXXXX (no leading +), or None if invalid.
+
+    Delegates to the single validator in sms_services so the send and verify
+    paths can never disagree about what a number normalises to — a mismatch
+    there silently breaks OTP verification.
+    """
+    from .sms_services import format_phone_for_sms
+    formatted = format_phone_for_sms(phone)
+    return formatted.lstrip('+') if formatted else None
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
+def send_verification_code(request):
+    identifier = request.data.get('identifier')
+    if not identifier:
+        return Response({'error': 'Identifier (email or phone) is required'}, status=400)
+
+    # Determine method
+    if '@' in identifier and '.' in identifier:
+        method = 'email'
+    else:
+        method = 'phone'
+
+    # Validate identifier format
+    if method == 'email':
+        # simple email validation
+        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', identifier):
+            return Response({'error': 'Invalid email address'}, status=400)
+        # Normalize email
+        identifier = identifier.lower()
+    else:
+        # Validate phone using existing formatter
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(identifier)
+        if not formatted:
+            return Response({'error': 'Please enter a valid Nigerian phone number, e.g. 08031234567.'}, status=400)
+        identifier = formatted.lstrip('+')  # store without '+'
+
+    # Delete old codes for this identifier
+    VerificationCode.objects.filter(identifier=identifier).delete()
+
+    # Create new code
+    verification = VerificationCode.objects.create(
+        identifier=identifier,
+        method=method,
+    )
+    code = verification.code
+
+    # Send code
+    sent = False
+    if method == 'email':
+        from .sms_services import send_email_code
+        sent = send_email_code(identifier, code)
+    else:
+        from .sms_services import send_sms_auto_fallback
+        sent = send_sms_auto_fallback(identifier, code)
+
+    if not sent:
+        # In DEBUG or sandbox, we still want to return success to allow testing
+        if not settings.DEBUG:
+            return Response({'error': 'Failed to send verification code'}, status=500)
+
+    response_data = {
+        'message': 'Code sent successfully',
+        'expires_in': 600,
+        'method': method,
+    }
+
+    # In sandbox or DEBUG, return the actual code for testing
+    is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
+    if is_sandbox or settings.DEBUG:
+        response_data['code'] = code
+        response_data['test_mode'] = True
+
+    return Response(response_data, status=200)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
+def verify_code(request):
+    identifier = request.data.get('identifier')
+    code = request.data.get('code')
+    if not identifier or not code:
+        return Response({'error': 'Identifier and code are required'}, status=400)
+
+    # Normalize identifier (same as send)
+    if '@' in identifier and '.' in identifier:
+        identifier = identifier.lower()
+    else:
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(identifier)
+        if not formatted:
+            return Response({'error': 'Invalid phone number'}, status=400)
+        identifier = formatted.lstrip('+')
+
+    try:
+        verification = VerificationCode.objects.get(
+            identifier=identifier,
+            code=code,
+            is_verified=False
+        )
+    except VerificationCode.DoesNotExist:
+        return Response({'error': 'Invalid verification code'}, status=400)
+
+    if verification.is_expired():
+        verification.delete()
+        return Response({'error': 'Code expired', 'expired': True}, status=400)
+
+    verification.is_verified = True
+    verification.save()
+    return Response({
+        'message': 'Verification successful',
+        'identifier': identifier,
+        'verified': True
+    })
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_verification_status(request):
+    identifier = request.data.get('identifier')
+    if not identifier:
+        return Response({'error': 'Identifier required'}, status=400)
+
+    # Normalize
+    if '@' in identifier and '.' in identifier:
+        identifier = identifier.lower()
+    else:
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(identifier)
+        if not formatted:
+            return Response({'error': 'Invalid identifier'}, status=400)
+        identifier = formatted.lstrip('+')
+
+    verified = VerificationCode.objects.filter(
+        identifier=identifier,
+        is_verified=True
+    ).exists()
+
+    return Response({'verified': verified})
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_or_register(request):
+    """
+    After verification, either login existing user or create new user.
+    Accepts 'identifier' (email or phone) and 'method' (optional, inferred).
+    """
+    identifier = request.data.get('identifier')
+    platform = request.data.get('platform', 'ole')
+
+    if not identifier:
+        return Response({'error': 'Identifier required'}, status=400)
+
+    # Normalize and determine method
+    if '@' in identifier and '.' in identifier:
+        method = 'email'
+        identifier = identifier.lower()
+    else:
+        method = 'phone'
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(identifier)
+        if not formatted:
+            return Response({'error': 'Invalid phone number'}, status=400)
+        identifier = formatted.lstrip('+')
+
+    # Check if verification exists and is verified
+    try:
+        verification = VerificationCode.objects.filter(
+            identifier=identifier,
+            is_verified=True
+        ).latest('created_at')
+    except VerificationCode.DoesNotExist:
+        return Response({
+            'error': 'Identifier not verified. Please verify first.',
+            'verified': False
+        }, status=400)
+
+    User = get_user_model()
+    if method == 'email':
+        user = User.objects.filter(email=identifier).first()
+    else:
+        user = User.objects.filter(phone_number=identifier).first()
+
+    is_new_user = False
+    if not user:
+        # Create new user
+        is_new_user = True
+        # Generate a random username and password
+        import uuid
+        random_suffix = str(uuid.uuid4())[:8]
+        if method == 'email':
+            # email is already unique, use as identifier
+            username = f"user_{random_suffix}"
+            email = identifier
+            phone_number = None
+        else:
+            # phone
+            username = f"user_{random_suffix}"
+            email = None
+            phone_number = identifier
+
+        # Ensure username uniqueness
+        while User.objects.filter(username=username).exists():
+            random_suffix = str(uuid.uuid4())[:8]
+            username = f"user_{random_suffix}"
+
+        # Create user with unusable password (OTP login)
+        user = User(
+            email=email,
+            phone_number=phone_number,
+            username=username,
+            full_name=f"{'Student' if platform=='ole' else 'User'} {identifier[-4:]}",
+            role='ole_student' if platform == 'ole' else 'student',
+            is_active=True
+        )
+        user.set_unusable_password()
+        user.save()
+
+        # Create OLE profile if needed
+        if platform == 'ole':
+            try:
+                OleStudentProfile.objects.get_or_create(user=user)
+            except:
+                pass
+
+    # Generate JWT tokens
+    refresh = RefreshToken.for_user(user)
+
+    response_data = {
+        'message': 'Login successful',
+        'user': {
+            'id': user.id,
+            'full_name': user.full_name,
+            'phone_number': user.phone_number,
+            'email': user.email,
+            'username': user.username,
+            'role': user.role,
+        },
+        'tokens': {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        },
+        'is_new_user': is_new_user
+    }
+
+    return Response(response_data)
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def phone_logout(request):
+    """
+    Logout by blacklisting refresh token
+    """
+    try:
+        refresh_token = request.data.get('refresh_token')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        
+        return Response({'message': 'Logged out successfully'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_profile(request):
+    """
+    Get current user's profile including phone number
+    """
+    user = request.user
+    
+    # Get additional profile data based on role
+    profile_data = {
+        'id': user.id,
+        'full_name': user.full_name,
+        'phone_number': user.phone_number,
+        'email': user.email,
+        'username': user.username,
+        'role': user.role,
+    }
+    
+    # Add OLE-specific data
+    if user.role == 'ole_student':
+        try:
+            profile = user.ole_profile
+            profile_data['class_level'] = profile.class_level.name if profile.class_level else None
+            profile_data['subjects'] = list(profile.subjects.values_list('name', flat=True))
+        except OleStudentProfile.DoesNotExist:
+            pass
+        
+        # Add subscription status
+        try:
+            subscription = user.ole_subscription
+            profile_data['subscription'] = {
+                'plan_type': subscription.plan_type,
+                'is_active': subscription.is_active(),
+                'expires_in_days': (subscription.end_date.date() - timezone.now().date()).days
+            }
+        except OleStudentSubscription.DoesNotExist:
+            profile_data['subscription'] = None
+    
+    return Response(profile_data)
+</file>
+
+<file path="users/views.py.backup">
+from rest_framework import status, permissions
+from django.utils.crypto import get_random_string
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import (UserRegistrationSerializer, 
+                          CustomTokenObtainPairSerializer, OleStudentRegistrationSerializer, 
+                          OleStudentDashboardSerializer)
+
+from .models import RegistrationGroup, OlePaymentVerification
+from .permissions import  IsTeacherUser, IsStudentUser, IsParentUser, IsAdminUser, IsOleStudentUser
+from .serializers import CustomUserSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from rest_framework.permissions import IsAuthenticated
+from .models import StudentSlot
+from .serializers import StudentSlotSerializer
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth import get_user_model
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
+from django.conf import settings
+from dj_rest_auth.views import LoginView
+from emails.sendgrid_email import send_email
+from datetime import timedelta
+from .models import OleStudentSubjectAccess, AdminActionLog 
+from django.utils import timezone
+from users.models import OleStudentSubscription, OleStudentProfile, SubscriptionPlan
+from .serializers import OleStudentProfileSerializer
+from rest_framework.authentication import TokenAuthentication
+import requests
+from teachers.models import OleClassLevel, OleSubject, OleStudentMatch, LiveClassSchedule, OleMaterial, OleLesson, AttendanceLog
+from django.shortcuts import get_object_or_404
+from .serializers import (
+    UserRegistrationSerializer,
+    MyTokenObtainPairSerializer, LiveClassScheduleDetailSerializer, LessonHistorySerializer, OleMaterialSerializer
+)
+import json
+import random
+import uuid
+import string
+from django.db import IntegrityError  # Make sure this is imported at the top
+from django.core.mail import send_mail
+from django.contrib import messages
+from django.db import IntegrityError, transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.decorators import api_view
+from .models import PhoneVerification
+from .sms_services import send_sms
+import logging
+import threading
+from django.core.cache import cache
+from django.http import JsonResponse
+
+User = get_user_model()
+
+
+logger = logging.getLogger(__name__)
+
+from rest_framework.throttling import SimpleRateThrottle, AnonRateThrottle
+from rest_framework.decorators import throttle_classes
+
+
+class OTPRateThrottle(AnonRateThrottle):
+    """Tight limit on OTP sends — each SMS costs money and codes are guessable."""
+    scope = "otp"
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
+
+
+class RegisterRateThrottle(AnonRateThrottle):
+    scope = "register"
+
+
+
+
+def generate_password(length=8):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+from users.models import CustomUser  # adjust import as needed
+
+User = get_user_model()
+username = f"ole_{uuid.uuid4().hex[:8]}"
+
+# User Registration View
+class UserRegistrationView(generics.CreateAPIView):
+    serializer_class = CustomUserSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                "success": True,
+                "message": "User registered successfully.",
+                "data": CustomUserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+        return Response({"success": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+   
+
+# Token Authentication View (Login)
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
+
+# Registration Group Creation (For Schools/Homes/Referrals)
+class RegistrationGroupView(APIView):
+    permission_classes = [IsAdminUser]  # Only admins can create groups
+
+    def post(self, request):
+        group_type = request.data.get('group_type')
+        state = request.data.get('state')
+        slots_applied = request.data.get('slots_applied')
+        proof_of_payment = request.data.get('proof_of_payment')
+
+        # Create a new registration group
+        group = RegistrationGroup.objects.create(
+            group_type=group_type,
+            state=state,
+            slots_applied=slots_applied,
+            slots_remaining=slots_applied,  # Initial remaining slots set to slots applied
+            proof_of_payment=proof_of_payment,
+        )
+
+        return Response({"message": f"{group_type.capitalize()} registered successfully", "group_id": group.id}, status=status.HTTP_201_CREATED)
+
+# Example of Teacher View
+class TeacherTestManagementView(APIView):
+    permission_classes = [IsTeacherUser]  # Only teachers can manage tests
+
+    def get(self, request):
+        # Example action: Get tests assigned to the teacher
+        # Logic for getting tests goes here
+        return Response({"message": "Tests for Teacher"}, status=status.HTTP_200_OK)
+
+# Example of Student View
+class StudentResultsView(APIView):
+    permission_classes = [IsStudentUser]  # Only students can view their results
+
+    def get(self, request):
+        # Example action: Get student's results
+        # Logic for getting results goes here
+        return Response({"message": "Student results"}, status=status.HTTP_200_OK)
+    
+
+
+class StudentLoginView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get("username")
+        password = request.data.get("password")
+
+        if not username or not password:
+            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Authenticate using username
+        try:
+            user_obj = CustomUser.objects.get(username=username)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = authenticate(request, username=user_obj.email, password=password)  # using email internally
+
+        if user is not None:
+            if user.role.lower() != "student":
+                return Response({"error": "User is not a student."}, status=status.HTTP_403_FORBIDDEN)
+
+            # ✅ Check subscription status
+            if user.registration_group and not user.registration_group.is_subscription_active():
+                return Response(
+                    {"detail": "Your subscription has expired. Please buy slots again to continue."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # ✅ Generate tokens
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "role": user.role,
+                "user_id": user.id
+            }, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_student_slots(request):
+    data = request.data.get('students', [])
+    created_slots = []
+
+    # Prefix example: 001/S001/
+    user_prefix = request.user.username[:-3]  # remove last 3 digits
+
+    current_count = StudentSlot.objects.filter(main_user=request.user).count()
+
+    for index, student in enumerate(data):
+        serial_number = str(current_count + index + 1).zfill(3)
+        username = f"{user_prefix}{serial_number}"
+        slot = StudentSlot.objects.create(
+            main_user=request.user,
+            full_name=student.get('full_name'),
+            email=student.get('email'),
+            username=username,
+            # StudentSlot is bookkeeping only — it is NOT a login account (those
+            # are CustomUser, hashed). No usable password is stored here.
+            password="",
+        )
+        created_slots.append(StudentSlotSerializer(slot).data)
+
+    return Response({'slots': created_slots}, status=status.HTTP_201_CREATED)
+
+
+class AdminOnlyView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"message": "Hello Admin!"})
+
+
+class TeacherOnlyView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated, IsTeacherUser]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"message": "Hello Teacher!"})
+
+
+# 1. Student Registration View
+class StudentRegistrationView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+
+
+# 2. Custom JWT Login View
+class CustomLoginView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
+
+
+class UserMeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = CustomUserSerializer(request.user)
+        return Response(serializer.data)
+
+
+
+class OleStudentRegistrationView(APIView):
+    throttle_classes = [RegisterRateThrottle]
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = OleStudentRegistrationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"].lower()
+        full_name = serializer.validated_data["full_name"]
+        plan_type = serializer.validated_data["plan_type"]
+        class_level_id = serializer.validated_data["class_level_id"]
+        subject_ids = serializer.validated_data["subject_ids"]
+
+        AdminActionLog.objects.create(
+            action_type="registration_attempt",
+            email=email,
+            details=f"Attempting registration with plan: {plan_type}, class_level_id: {class_level_id}",
+        )
+
+        try:
+            class_level = OleClassLevel.objects.get(id=class_level_id)
+            if not subject_ids:
+                return Response({"detail": "No subjects selected."}, status=400)
+
+            subjects = OleSubject.objects.filter(id__in=subject_ids)
+            if not subjects.exists():
+                return Response({"detail": "Invalid subject selection."}, status=400)
+
+        except OleClassLevel.DoesNotExist:
+            return Response({"detail": "Invalid class level selected."}, status=400)
+
+        # ✅ DO NOT create user here anymore — let payment verification handle it
+
+        # OLE currently offers the monthly plan only. plan_type is captured for
+        # future use but the plan/amount are resolved from the monthly config.
+        plan_id = settings.PAYSTACK_PLAN_IDS.get("monthly")
+        amount = settings.PAYSTACK_PLAN_AMOUNTS.get("monthly")
+
+        if not plan_id or not amount:
+            logger.error(
+                "OLE plan misconfigured: plan_id=%r amount=%r. Check "
+                "PAYSTACK_PLAN_IDS/PAYSTACK_PLAN_AMOUNTS in settings.",
+                plan_id, amount,
+            )
+            return Response(
+                {"error": "Subscription plan is not configured. Please contact support."},
+                status=500,
+            )
+
+        # ✅ Decide callback URL
+        is_mobile = request.data.get("is_mobile", False)
+        if is_mobile:
+            callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"  # 👈 deep link back to mobile app
+        else:
+            callback_url = settings.OLE_PAYMENT_CALLBACK_URL  # 👈 default (web)
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "email": email,
+            "amount": amount,
+            "plan": plan_id,
+            "callback_url": callback_url,
+            "metadata": {
+                "full_name": full_name,
+                "email": email,
+                "plan_type": plan_type,
+                "is_ole_student": True,
+                "class_level_id": class_level_id,
+                "subject_ids": subject_ids,
+                "is_mobile": is_mobile,  # 👈 tracked for debugging
+            },
+        }
+
+        logger.debug("Paystack init payload prepared for %s", email)
+
+        try:
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                json=data,
+                headers=headers
+            )
+            result = response.json()
+        except Exception as e:
+            AdminActionLog.objects.create(
+                action_type="error",
+                email=email,
+                details=f"Paystack error: {str(e)}"
+            )
+            return Response({"error": "Could not reach Paystack."}, status=502)
+
+        if response.status_code == 200 and result.get("status") and result.get("data"):
+            AdminActionLog.objects.create(
+                action_type="payment_initialized",
+                email=email,
+                details="Payment initialized successfully with Paystack."
+            )
+            return Response({"authorization_url": result["data"]["authorization_url"]}, status=200)
+
+        paystack_message = result.get("message", "Unknown error")
+        # "Plan not found" here means the configured PAYSTACK_PLAN_IDS['monthly']
+        # does not exist in the Paystack account tied to the current secret key
+        # (usually a test-vs-live key/plan mismatch, or a deleted plan).
+        logger.error(
+            "Paystack init failed for %s. plan_id=%s message=%r",
+            email, plan_id, paystack_message,
+        )
+        AdminActionLog.objects.create(
+            action_type="error",
+            email=email,
+            details=f"Paystack init failed (plan_id={plan_id}): {paystack_message}"
+        )
+        user_message = (
+            "We could not start your payment. Please try again shortly, or "
+            "contact support if this continues."
+        )
+        return Response({"error": user_message, "gateway_message": paystack_message}, status=400)
+
+
+
+class VerifyOleStudentPaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        logger.info("=== VERIFY OLE STUDENT PAYMENT CALLED ===")
+
+        reference = request.data.get("reference")
+        if not reference:
+            logger.info("❌ Missing reference in request.")
+            return Response({"error": "Missing reference."}, status=400)
+        
+        # ✅ FINAL FIX: Use a database transaction for an atomic and persistent idempotency check.
+        try:
+            # Attempt to create a new record. This will fail if the reference already exists
+            # due to the 'unique=True' constraint on the PaymentVerification model.
+            OlePaymentVerification.objects.create(reference=reference)
+            logger.info(f"✅ Created new verification record for: {reference}")
+        except IntegrityError:
+            # If the record already exists, catch the error and immediately return a success response.
+            logger.warning(f"⚠️ Duplicate verification attempt for {reference} (DB check).")
+            return Response(
+                {"status": "duplicate", "message": "Payment already processed."},
+                status=200
+            )
+
+        logger.info(f"🔍 Verifying payment with reference: {reference}")
+        verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+        }
+
+        try:
+            response = requests.get(verify_url, headers=headers)
+            result = response.json()
+            logger.info(f"✅ PAYSTACK VERIFY RESULT: {json.dumps(result, indent=2)}")
+        except Exception as e:
+            logger.info(f"❌ Error contacting Paystack: {str(e)}")
+            # Consider rolling back the PaymentVerification creation if Paystack is unavailable
+            # to allow for a future retry, though this adds complexity.
+            return Response({"error": "Verification service unavailable."}, status=502)
+
+        if not (result.get("status") and result["data"].get("status") == "success"):
+            logger.info("❌ Payment verification failed or incomplete.")
+            return Response({"error": "Payment verification failed or incomplete."}, status=400)
+
+        metadata = result["data"].get("metadata", {})
+        logger.info(f"📦 Extracted Metadata: {json.dumps(metadata, indent=2)}")
+
+        email = metadata.get("email", "").strip().lower()
+        full_name = metadata.get("full_name")
+        plan_type = metadata.get("plan_type")
+        class_level_id = metadata.get("class_level_id")
+        subject_ids = metadata.get("subject_ids", [])
+
+        if not email or not full_name or not plan_type or not class_level_id:
+            logger.info(f"❌ Incomplete metadata from Paystack: {metadata}")
+            return Response({"error": "Incomplete metadata from Paystack."}, status=400)
+
+        logger.info(f"👤 Normalized Email: {email}")
+
+        user = CustomUser.objects.filter(email=email).first()
+        new_user_created = False
+        password = None
+
+        if user:
+            logger.info(f"🔍 Found existing user: {email}")
+            if user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists():
+                logger.info("✅ Existing user is fully registered.")
+                # The frontend will receive the same 200 OK response with the same message and data.
+                return Response({
+                    "message": "Payment verified. Your account is already active.",
+                    "email": user.email,
+                    "temporary_password": None,
+                    "role": user.role
+                }, status=200)
+            else:
+                logger.info("⚠️ Existing user is incomplete. Proceeding to complete setup.")
+        else:
+            logger.info("🆕 Creating new user...")
+            password = get_random_string(8)
+            try:
+                user = CustomUser.objects.create_user(
+                    email=email,
+                    full_name=full_name,
+                    role="ole_student",
+                    password=password,
+                    is_active=True,
+                )
+                new_user_created = True
+                logger.info(f"✅ User created: {user.email}")
+            except IntegrityError as e:
+                logger.info(f"❌ IntegrityError during user creation: {e}")
+                return Response({
+                    "error": "User creation failed — possibly due to duplicate or bad data."
+                }, status=400)
+            except Exception as e:
+                logger.info(f"❌ Unexpected error during user creation: {e}")
+                return Response({
+                    "error": f"Unexpected error during user creation: {str(e)}"
+                }, status=500)
+
+        # Step: Assign class and subjects
+        try:
+            class_level = OleClassLevel.objects.get(id=class_level_id)
+            subjects = OleSubject.objects.filter(id__in=subject_ids)
+            user.ole_class_level = class_level
+            user.save()
+            user.ole_subjects.set(subjects)
+            logger.info("✅ Class level and subjects assigned.")
+        except Exception as e:
+            logger.info(f"❌ Error assigning class/subjects: {e}")
+            return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
+
+        # Step: Create subscription
+        try:
+            now = timezone.now()
+            duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
+            OleStudentSubscription.objects.create(
+                user=user,
+                plan_type=plan_type,
+                end_date=now + duration
+            )
+            logger.info("✅ Subscription created successfully.")
+        except Exception as e:
+            logger.info(f"❌ Subscription creation failed: {e}")
+            return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
+
+        # Step: Send welcome email (non-blocking)
+        def send_async_email(subject, message, recipient):
+            def _send():
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        "noreply@ischool.ng",
+                        [recipient],
+                        fail_silently=True
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Async email send failed: {e}")
+            threading.Thread(target=_send, daemon=True).start()
+
+        welcome_subject = "Welcome to iSchool Ole!"
+        welcome_message = f"""
+        Hello {full_name},
+
+        Your iSchool Ole account has been successfully created.
+
+        Login Details:
+        Email: {email}
+        Password: {password or '[already set]'}
+
+        Visit: https://www.ischool.ng/ole-student/login
+
+        Best regards,  
+        iSchool Ole Team
+        """
+
+        send_async_email(welcome_subject, welcome_message, email)
+        logger.info(f"📨 Welcome email queued for: {email}")
+
+        # The frontend will receive the same response body and status codes.
+        return Response({
+            "message": (
+                "Payment verified and account created."
+                if new_user_created
+                else "Account completed successfully. Please copy your email and Password to login"
+            ),
+            "email": email,
+            "temporary_password": password if new_user_created else None,
+            "role": "ole_student",
+        }, status=201 if new_user_created else 200)
+
+
+class OleStudentLoginView(LoginView):
+    """
+    Custom login view that only allows users with the role 'ole_student' to log in.
+
+    - Uses dj-rest-auth's LoginView for authentication.
+    - After authentication, checks the user's role.
+    - Denies access if the user is not an 'ole_student'.
+    """
+
+    def post(self, request, *args, **kwargs):
+        # Authenticate using built-in LoginView logic
+        response = super().post(request, *args, **kwargs)
+
+        # Get the authenticated user
+        user = self.user
+
+        # If user exists but is not an ole_student → deny access
+        if user and user.role != "ole_student":
+            return Response(
+                {"error": "Access denied. You are not registered as an Ole Student."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # If ole_student, return the original login response (includes token)
+        return response
+
+        
+
+class OleStudentDashboardView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # ✅ Handle AnonymousUser gracefully
+        if user.is_anonymous:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # ✅ Check if user has correct role
+        if user.role != "ole_student":
+            return Response({"error": "Access denied. Only Ole Students can access this view."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = OleStudentDashboardSerializer(user)
+        return Response(serializer.data, status=200)
+    
+
+# Example of Parent View
+class ParentResultsView(APIView):
+    permission_classes = [IsParentUser]  # Only parents can view their child's results
+
+    def get(self, request):
+        # Example action: Get child's results (assuming parent is related to student)
+        # Logic for getting child's results goes here
+        return Response({"message": "Parent's view of child's results"}, status=status.HTTP_200_OK)
+    
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_student_lesson_detail(request, id):
+    user = request.user
+
+    try:
+        match = OleStudentMatch.objects.get(student=user, schedule_id=id)
+    except OleStudentMatch.DoesNotExist:
+        return Response({"error": "Not matched to this lesson."}, status=403)
+
+    if not user.is_subscription_active():
+        return Response({"error": "Inactive subscription. Please renew to access this lesson."}, status=403)
+
+    lesson = get_object_or_404(LiveClassSchedule, id=id)
+    serializer = LiveClassScheduleDetailSerializer(lesson)
+    return Response(serializer.data)
+
+
+
+class OleStudentLessonHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if user.role != "ole_student":
+            return Response({"error": "Unauthorized"}, status=403)
+        
+        if not user.is_subscription_active():
+            return Response(
+                {"detail": "Your subscription has expired. Please renew to continue."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        lessons = OleLesson.objects.filter(
+            class_level=user.ole_class_level,
+            subject__in=user.ole_subjects.all(),
+            date__lt=timezone.now().date()
+        ).order_by("-date")
+
+        serializer = LessonHistorySerializer(lessons, many=True)
+        return Response(serializer.data)
+
+
+class OleStudentMaterialListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if not user.is_subscription_active():
+            return Response(
+                {"detail": "Your subscription has expired. Please renew to continue."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if user.role != "ole_student":
+            return Response({"error": "Unauthorized"}, status=403)
+
+        materials = (
+            OleMaterial.objects
+            .filter(
+                class_level=user.ole_class_level,
+                subject__in=user.ole_subjects.all(),
+            )
+            .select_related("subject", "class_level")  # serializer renders both
+            .order_by("-uploaded_at")
+        )
+
+        serializer = OleMaterialSerializer(materials, many=True)
+        return Response(serializer.data)
+
+
+class RenewSubscriptionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        plan_id = request.data.get("plan_id")
+
+        if not plan_id:
+            return Response({"error": "Plan ID is required."}, status=400)
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response({"error": "Invalid subscription plan."}, status=404)
+
+        now = timezone.now().date()  # Use `.date()` to match the model field type
+
+        # Extend or set the subscription expiration correctly
+        if user.subscription_expires_on and user.subscription_expires_on >= now:
+            user.subscription_expires_on += timedelta(days=plan.duration_days)
+        else:
+            user.subscription_expires_on = now + timedelta(days=plan.duration_days)
+
+        user.save()
+        return Response({
+            "message": "Subscription renewed successfully.",
+            "expires_on": user.subscription_expires_on
+        })
+
+# views.py
+class SubscriptionPlanListAPIView(APIView):
+    def get(self, request):
+        plans = SubscriptionPlan.objects.all().values('id', 'name', 'price', 'duration_days')
+        return Response(plans)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def initialize_subscription_payment(request):
+    user = request.user
+    plan = {
+        "id": 1,
+        "name": "Monthly Access",
+        "price": 5000,  # NGN
+        "duration_days": 30
+    }
+
+    reference = f"SUB-{uuid.uuid4().hex[:10].upper()}"
+    callback_url = settings.OLE_PAYMENT_CALLBACK_URL
+
+    paystack_payload = {
+        "reference": reference,
+        "amount": plan["price"] * 100,  # Kobo
+        "email": user.email,
+        "callback_url": callback_url,
+        "metadata": {
+            "user_id": user.id,
+            "plan_id": plan["id"],
+            "plan_name": plan["name"],
+            "duration_days": plan["duration_days"]
+        }
+    }
+    return Response(paystack_payload)@api_view(["POST"])
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_payment(request):
+    reference = request.data.get("reference")
+    if not reference:
+        return Response({"error": "Transaction reference is required."}, status=400)
+
+    headers = {
+        "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+    }
+
+    verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
+
+    try:
+        paystack_response = requests.get(verify_url, headers=headers)
+        result = paystack_response.json()
+
+        if result["status"] is not True:
+            return Response({"error": "Payment verification failed."}, status=400)
+
+        data = result["data"]
+        if data["status"] != "success":
+            return Response({"error": "Payment was not successful."}, status=400)
+
+        metadata = data.get("metadata", {})
+        user_id = metadata.get("user_id")
+        plan_id = metadata.get("plan_id")
+
+        # Safety check
+        if user_id != request.user.id:
+            return Response({"error": "User mismatch."}, status=403)
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response({"error": "Subscription plan not found."}, status=404)
+
+        user = request.user
+        now = timezone.now()
+        if user.subscription_expiry and user.subscription_expiry > now:
+            user.subscription_expiry += timedelta(days=plan.duration_days)
+        else:
+            user.subscription_expiry = now + timedelta(days=plan.duration_days)
+
+        user.plan_type = plan.name  # Optional: track what plan they're on
+        user.save()
+
+        return Response({"message": "Subscription renewed successfully.", "expires_on": user.subscription_expiry})
+
+    except requests.RequestException:
+        return Response({"error": "Error contacting Paystack."}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def log_student_join(request):
+    session_id = request.data.get("session_id")
+    user = request.user
+
+    if AttendanceLog.objects.filter(session_id=session_id, student=user).exists():
+        return Response({"detail": "Already logged."})
+
+    log = AttendanceLog.objects.create(session_id=session_id, student=user)
+    return Response({"attendance_id": log.id})
+
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def log_student_leave(request):
+    session_id = request.data.get("session_id")
+    user = request.user
+
+    try:
+        log = AttendanceLog.objects.get(session_id=session_id, student=user)
+        log.left_at = timezone.now()
+        log.save()
+        return Response({"detail": "Left time logged."})
+    except AttendanceLog.DoesNotExist:
+        return Response({"detail": "Attendance not found."}, status=404)
+
+def format_phone_number(phone):
+    """
+    Canonical NG number as 234XXXXXXXXXX (no leading +), or None if invalid.
+
+    Delegates to the single validator in sms_services so the send and verify
+    paths can never disagree about what a number normalises to — a mismatch
+    there silently breaks OTP verification.
+    """
+    from .sms_services import format_phone_for_sms
+    formatted = format_phone_for_sms(phone)
+    return formatted.lstrip('+') if formatted else None
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
+def send_verification_code(request):
+    try:
+        phone = request.data.get('phone_number')
+        platform = request.data.get('platform', 'ole')
+        
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+
+        # Canonicalise to E.164 with the same validator the SMS layer uses, so
+        # the stored number and the sent number always agree — and reject
+        # obviously invalid numbers before spending an SMS on them.
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(phone)
+        if not formatted:
+            return Response(
+                {'error': 'Please enter a valid Nigerian phone number, e.g. 08031234567.'},
+                status=400,
+            )
+        # Store without the leading '+' to match the existing lookup format (234...).
+        phone = formatted.lstrip('+')
+
+        # Delete old codes
+        PhoneVerification.objects.filter(phone_number=phone).delete()
+        
+        # Create new code
+        verification = PhoneVerification.objects.create(phone_number=phone)
+        
+        logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
+        logger.info("Verification code generated for %s", phone)
+        
+        # Check if we're in sandbox mode
+        is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
+        
+        # Send SMS using the auto-fallback service
+        from .sms_services import send_sms_auto_fallback
+        sms_sent = send_sms_auto_fallback(phone, verification.code)
+        
+        if not sms_sent and not is_sandbox:
+            logger.error(f"Failed to send SMS to {phone}")
+            # Still return success in DEBUG mode
+            if not settings.DEBUG:
+                return Response(
+                    {'error': 'Failed to send verification code. Please try again.'}, 
+                    status=500
+                )
+        
+        # Build response data
+        response_data = {
+            'message': 'Code sent successfully',
+            'expires_in': 600
+        }
+        
+        # Only return the actual code in sandbox mode or DEBUG mode
+        if is_sandbox or settings.DEBUG:
+            response_data['code'] = verification.code
+            response_data['test_mode'] = True
+        
+        return Response(response_data, status=200)  # ✅ Explicit status
+        
+    except Exception as e:
+        logger.error(f"Error in send_verification_code: {str(e)}", exc_info=True)
+        logger.error("send_verification_code error: %s", e, exc_info=True)
+        return Response(
+            {'error': f'Server error: {str(e)}'}, 
+            status=500
+        )
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([OTPRateThrottle])
+def verify_code(request):
+    try:
+        phone = request.data.get('phone_number')
+        code = request.data.get('code')
+        platform = request.data.get('platform', 'ole')
+        
+        logger.debug("Verifying phone %s", phone)
+        
+        if not phone or not code:
+            return Response({'error': 'Phone number and code are required'}, status=400)
+        
+        # Format phone using the shared validator.
+        phone = format_phone_number(phone)
+        if not phone:
+            return Response({'error': 'Please enter a valid Nigerian phone number.'}, status=400)
+        
+        try:
+            verification = PhoneVerification.objects.get(
+                phone_number=phone,
+                code=code,
+                is_verified=False
+            )
+            
+            logger.debug("OTP record expires at %s", verification.expires_at)
+            logger.debug("Current time %s", timezone.now())
+            
+            # Check if expired
+            if verification.is_expired():
+                logger.info("OTP expired for %s", phone)
+                # Delete expired code
+                verification.delete()
+                return Response({
+                    'error': 'Code has expired. Please request a new code.',
+                    'expired': True
+                }, status=400)
+            
+            # Mark as verified
+            verification.is_verified = True
+            verification.save()
+            
+            logger.info("OTP verified for %s", phone)
+            
+            return Response({
+                'message': 'Phone number verified successfully',
+                'platform': platform,
+                'verified': True
+            })
+            
+        except PhoneVerification.DoesNotExist:
+            logger.info("No valid OTP record for %s", phone)
+            return Response({'error': 'Invalid verification code'}, status=400)
+            
+    except Exception as e:
+        logger.error("verify_code error: %s", e, exc_info=True)
+        import traceback
+        traceback.print_exc()
+        return Response({'error': f'Server error: {str(e)}'}, status=500)
+    
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def check_verification_status(request):
+    phone = request.data.get('phone_number')
+    platform = request.data.get('platform', 'ole')
+    
+    if not phone:
+        return Response({'error': 'Phone number is required'}, status=400)
+    
+    # Format phone
+    phone = phone.strip().replace(' ', '')
+    if not phone.startswith('234'):
+        phone = '234' + phone.lstrip('0')
+    
+    try:
+        # Check if there's a verified record for this phone
+        verification = PhoneVerification.objects.filter(
+            phone_number=phone,
+            is_verified=True
+        ).exists()
+        
+        return Response({
+            'verified': verification,
+            'message': 'Phone number already verified' if verification else 'Phone number not verified'
+        })
+            
+    except Exception as e:
+        logger.error(f"Check verification error: {e}")
+        return Response({'verified': False, 'error': str(e)}, status=500)
+@csrf_exempt
+def api_root(request):
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Users API is working',
+        'available_endpoints': [
+            'POST /api/users/phone/send-code/',
+            'POST /api/users/phone/verify-code/',
+            'POST /api/users/phone/check-verification/',
+        ]
+    })
+
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def phone_login_or_register(request):
+    """
+    After phone verification, either:
+    1. Login existing user by phone number
+    2. Create new user and login
+    """
+    try:
+        phone = request.data.get('phone_number')
+        platform = request.data.get('platform', 'ole')
+        
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+        
+        # Format phone
+        phone = format_phone_number(phone)
+        
+        logger.info(f"Phone login/register attempt for: {phone}")
+        
+        # Check if verification exists and is verified
+        try:
+            verification = PhoneVerification.objects.filter(
+                phone_number=phone,
+                is_verified=True
+            ).latest('created_at')
+        except PhoneVerification.DoesNotExist:
+            return Response({
+                'error': 'Phone number not verified. Please verify first.',
+                'verified': False
+            }, status=400)
+        
+        User = get_user_model()
+        
+        # ✅ Check if user already exists with this phone
+        user = User.objects.filter(phone_number=phone).first()
+        
+        if user:
+            # ✅ EXISTING USER - just login
+            is_new_user = False
+            logger.info(f"Existing user found: {user.email}")
+            
+            # Update full_name if it was auto-generated
+            if user.full_name.startswith('Student '):
+                user.full_name = f"Student {phone[-4:]}"
+                user.save()
+        else:
+            # ✅ NEW USER - create account
+            is_new_user = True
+            random_suffix = get_random_string(6).lower()
+            email = f"phone_{phone[-8:]}_{random_suffix}@ischool.ng"
+            username = f"ole_{phone[-6:]}_{random_suffix[:4]}"
+            
+            # Ensure unique username
+            counter = 1
+            base_username = username
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            # Ensure unique email
+            counter = 1
+            base_email = email
+            while User.objects.filter(email=email).exists():
+                email = f"phone_{phone[-8:]}_{random_suffix}_{counter}@ischool.ng"
+                counter += 1
+            
+            # Create user
+            user = User(
+                email=email,
+                phone_number=phone,
+                username=username,
+                full_name=f"Student {phone[-4:]}",
+                role='ole_student' if platform == 'ole' else 'student',
+                is_active=True,
+            )
+            
+            # Set an unusable password (phone auth doesn't need passwords)
+            user.set_unusable_password()
+            
+            try:
+                user.save()
+                logger.info(f"New user created: {user.email} with phone {phone}")
+            except Exception as e:
+                logger.error(f"Failed to save user: {str(e)}")
+                raise
+            
+            # Create OLE profile if applicable
+            if platform == 'ole':
+                try:
+                    OleStudentProfile.objects.get_or_create(user=user)
+                except Exception as e:
+                    logger.error(f"Failed to create OLE profile: {e}")
+        
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        
+        response_data = {
+            'message': 'Login successful',
+            'user': {
+                'id': user.id,
+                'full_name': user.full_name,
+                'phone_number': user.phone_number,
+                'email': user.email,
+                'username': user.username,
+                'role': user.role,
+            },
+            'tokens': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            },
+            'is_new_user': is_new_user
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Phone login/register error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Server error: {str(e)}'}, 
+            status=500
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def phone_logout(request):
+    """
+    Logout by blacklisting refresh token
+    """
+    try:
+        refresh_token = request.data.get('refresh_token')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        
+        return Response({'message': 'Logged out successfully'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_profile(request):
+    """
+    Get current user's profile including phone number
+    """
+    user = request.user
+    
+    # Get additional profile data based on role
+    profile_data = {
+        'id': user.id,
+        'full_name': user.full_name,
+        'phone_number': user.phone_number,
+        'email': user.email,
+        'username': user.username,
+        'role': user.role,
+    }
+    
+    # Add OLE-specific data
+    if user.role == 'ole_student':
+        try:
+            profile = user.ole_profile
+            profile_data['class_level'] = profile.class_level.name if profile.class_level else None
+            profile_data['subjects'] = list(profile.subjects.values_list('name', flat=True))
+        except OleStudentProfile.DoesNotExist:
+            pass
+        
+        # Add subscription status
+        try:
+            subscription = user.ole_subscription
+            profile_data['subscription'] = {
+                'plan_type': subscription.plan_type,
+                'is_active': subscription.is_active(),
+                'expires_in_days': (subscription.end_date.date() - timezone.now().date()).days
+            }
+        except OleStudentSubscription.DoesNotExist:
+            profile_data['subscription'] = None
+    
+    return Response(profile_data)
+</file>
+
+</files>

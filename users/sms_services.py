@@ -2,6 +2,8 @@
 import africastalking
 import logging
 from django.conf import settings
+from django.core.mail import send_mail
+
 
 logger = logging.getLogger(__name__)
 
@@ -148,4 +150,16 @@ def send_sms_auto_fallback(phone_number, code):
         
     except Exception as e:
         logger.error("SMS error: %s", e, exc_info=True)
+        return False
+
+def send_email_code(email, code):
+    """Send OTP code via email."""
+    subject = "Your iSchool verification code"
+    message = f"Your iSchool verification code is {code}. It expires in 10 minutes."
+    from_email = settings.DEFAULT_FROM_EMAIL
+    try:
+        send_mail(subject, message, from_email, [email], fail_silently=False)
+        return True
+    except Exception as e:
+        logger.error(f"Email send failed for {email}: {e}")
         return False

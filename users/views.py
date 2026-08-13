@@ -1,8 +1,9 @@
-from rest_framework import status, permissions
 from django.utils.crypto import get_random_string
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+import re
+from .sms_services import send_email_code, send_sms_auto_fallback
 from .serializers import (UserRegistrationSerializer, 
                           CustomTokenObtainPairSerializer, OleStudentRegistrationSerializer, 
                           OleStudentDashboardSerializer)
@@ -38,6 +39,7 @@ from .serializers import (
     MyTokenObtainPairSerializer, LiveClassScheduleDetailSerializer, LessonHistorySerializer, OleMaterialSerializer
 )
 import json
+import re
 import random
 import uuid
 import string
@@ -47,13 +49,17 @@ from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, throttle_classes, permission_classe
 from .models import PhoneVerification
 from .sms_services import send_sms
 import logging
 import threading
 from django.core.cache import cache
 from django.http import JsonResponse
+from .models import VerificationCode
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
 User = get_user_model()
 
@@ -685,7 +691,6 @@ class OleStudentMaterialListView(APIView):
         serializer = OleMaterialSerializer(materials, many=True)
         return Response(serializer.data)
 
-
 class RenewSubscriptionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -854,309 +859,266 @@ def format_phone_number(phone):
     return formatted.lstrip('+') if formatted else None
 
 
+class OTPRateThrottle(AnonRateThrottle):
+    """Rate-limit anonymous OTP requests by client IP address."""
+
+    scope = 'otp'
+    rate = '5/min'
+
+
+def _normalise_verification_identifier(request):
+    """
+    Read the identifier field (or legacy fields) and return the identifier
+    exactly as it is stored in VerificationCode.
+
+    Returns: (identifier, method, error_message)
+    """
+    raw_identifier = (
+        request.data.get('identifier')
+        or request.data.get('email')
+        or request.data.get('phone_number')
+    )
+    identifier = str(raw_identifier).strip() if raw_identifier is not None else ''
+
+    if not identifier:
+        return None, None, 'Identifier (email or phone) is required'
+
+    requested_method = str(request.data.get('method') or '').strip().lower()
+    if requested_method and requested_method not in ('email', 'phone'):
+        return None, None, 'Method must be either email or phone'
+
+    # Older clients do not send method, so infer it for backwards compatibility.
+    method = requested_method or ('email' if '@' in identifier else 'phone')
+
+    if method == 'email':
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', identifier):
+            return None, None, 'Invalid email address'
+        return identifier.lower(), method, None
+
+    # Keep this import local if sms_services imports models or Django settings.
+    from .sms_services import format_phone_for_sms
+
+    formatted_phone = format_phone_for_sms(identifier)
+    if not formatted_phone:
+        return (
+            None,
+            None,
+            'Please enter a valid Nigerian phone number, e.g. 08031234567.',
+        )
+
+    # VerificationCode historically stores phone identifiers without the plus.
+    return formatted_phone.lstrip('+'), method, None
+
+
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([OTPRateThrottle])
 def send_verification_code(request):
-    try:
-        phone = request.data.get('phone_number')
-        platform = request.data.get('platform', 'ole')
-        
-        if not phone:
-            return Response({'error': 'Phone number is required'}, status=400)
+    identifier, method, error = _normalise_verification_identifier(request)
+    if error:
+        return Response({'error': error}, status=400)
 
-        # Canonicalise to E.164 with the same validator the SMS layer uses, so
-        # the stored number and the sent number always agree — and reject
-        # obviously invalid numbers before spending an SMS on them.
-        from .sms_services import format_phone_for_sms
-        formatted = format_phone_for_sms(phone)
-        if not formatted:
-            return Response(
-                {'error': 'Please enter a valid Nigerian phone number, e.g. 08031234567.'},
-                status=400,
-            )
-        # Store without the leading '+' to match the existing lookup format (234...).
-        phone = formatted.lstrip('+')
+    # Only one active code should exist for an identifier.
+    VerificationCode.objects.filter(identifier=identifier).delete()
 
-        # Delete old codes
-        PhoneVerification.objects.filter(phone_number=phone).delete()
-        
-        # Create new code
-        verification = PhoneVerification.objects.create(phone_number=phone)
-        
-        logger.info(f"VERIFICATION CODE for {phone}: {verification.code}")
-        logger.info("Verification code generated for %s", phone)
-        
-        # Check if we're in sandbox mode
-        is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
-        
-        # Send SMS using the auto-fallback service
+    verification = VerificationCode.objects.create(
+        identifier=identifier,
+        method=method,
+    )
+
+    if method == 'email':
+        from .sms_services import send_email_code
+
+        sent = send_email_code(identifier, verification.code)
+    else:
         from .sms_services import send_sms_auto_fallback
-        sms_sent = send_sms_auto_fallback(phone, verification.code)
-        
-        if not sms_sent and not is_sandbox:
-            logger.error(f"Failed to send SMS to {phone}")
-            # Still return success in DEBUG mode
-            if not settings.DEBUG:
-                return Response(
-                    {'error': 'Failed to send verification code. Please try again.'}, 
-                    status=500
-                )
-        
-        # Build response data
-        response_data = {
-            'message': 'Code sent successfully',
-            'expires_in': 600
-        }
-        
-        # Only return the actual code in sandbox mode or DEBUG mode
-        if is_sandbox or settings.DEBUG:
-            response_data['code'] = verification.code
-            response_data['test_mode'] = True
-        
-        return Response(response_data, status=200)  # ✅ Explicit status
-        
-    except Exception as e:
-        logger.error(f"Error in send_verification_code: {str(e)}", exc_info=True)
-        logger.error("send_verification_code error: %s", e, exc_info=True)
-        return Response(
-            {'error': f'Server error: {str(e)}'}, 
-            status=500
-        )
+
+        sent = send_sms_auto_fallback(identifier, verification.code)
+
+    # In development/sandbox, allow the client to continue if the provider is
+    # intentionally unavailable. Do not do this in production.
+    if not sent and not settings.DEBUG:
+        return Response({'error': 'Failed to send verification code'}, status=500)
+
+    response_data = {
+        'message': 'Code sent successfully',
+        'expires_in': 600,
+        'method': method,
+    }
+
+    is_sandbox = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
+    if is_sandbox or settings.DEBUG:
+        response_data['code'] = verification.code
+        response_data['test_mode'] = True
+
+    return Response(response_data, status=200)
+
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([OTPRateThrottle])
 def verify_code(request):
+    identifier, _method, error = _normalise_verification_identifier(request)
+    code = str(request.data.get('code') or '').strip()
+
+    if error:
+        return Response({'error': error}, status=400)
+    if not code:
+        return Response({'error': 'Identifier and code are required'}, status=400)
+
     try:
-        phone = request.data.get('phone_number')
-        code = request.data.get('code')
-        platform = request.data.get('platform', 'ole')
-        
-        logger.debug("Verifying phone %s", phone)
-        
-        if not phone or not code:
-            return Response({'error': 'Phone number and code are required'}, status=400)
-        
-        # Format phone using the shared validator.
-        phone = format_phone_number(phone)
-        if not phone:
-            return Response({'error': 'Please enter a valid Nigerian phone number.'}, status=400)
-        
-        try:
-            verification = PhoneVerification.objects.get(
-                phone_number=phone,
-                code=code,
-                is_verified=False
-            )
-            
-            logger.debug("OTP record expires at %s", verification.expires_at)
-            logger.debug("Current time %s", timezone.now())
-            
-            # Check if expired
-            if verification.is_expired():
-                logger.info("OTP expired for %s", phone)
-                # Delete expired code
-                verification.delete()
-                return Response({
-                    'error': 'Code has expired. Please request a new code.',
-                    'expired': True
-                }, status=400)
-            
-            # Mark as verified
-            verification.is_verified = True
-            verification.save()
-            
-            logger.info("OTP verified for %s", phone)
-            
-            return Response({
-                'message': 'Phone number verified successfully',
-                'platform': platform,
-                'verified': True
-            })
-            
-        except PhoneVerification.DoesNotExist:
-            logger.info("No valid OTP record for %s", phone)
-            return Response({'error': 'Invalid verification code'}, status=400)
-            
-    except Exception as e:
-        logger.error("verify_code error: %s", e, exc_info=True)
-        import traceback
-        traceback.print_exc()
-        return Response({'error': f'Server error: {str(e)}'}, status=500)
-    
+        verification = VerificationCode.objects.get(
+            identifier=identifier,
+            code=code,
+            is_verified=False,
+        )
+    except VerificationCode.DoesNotExist:
+        return Response({'error': 'Invalid verification code'}, status=400)
+
+    if verification.is_expired():
+        verification.delete()
+        return Response({'error': 'Code expired', 'expired': True}, status=400)
+
+    verification.is_verified = True
+    verification.save(update_fields=['is_verified'])
+
+    return Response(
+        {
+            'message': 'Verification successful',
+            'identifier': identifier,
+            'verified': True,
+        },
+        status=200,
+    )
+
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def check_verification_status(request):
-    phone = request.data.get('phone_number')
-    platform = request.data.get('platform', 'ole')
-    
-    if not phone:
-        return Response({'error': 'Phone number is required'}, status=400)
-    
-    # Format phone
-    phone = phone.strip().replace(' ', '')
-    if not phone.startswith('234'):
-        phone = '234' + phone.lstrip('0')
-    
-    try:
-        # Check if there's a verified record for this phone
-        verification = PhoneVerification.objects.filter(
-            phone_number=phone,
-            is_verified=True
-        ).exists()
-        
-        return Response({
-            'verified': verification,
-            'message': 'Phone number already verified' if verification else 'Phone number not verified'
-        })
-            
-    except Exception as e:
-        logger.error(f"Check verification error: {e}")
-        return Response({'verified': False, 'error': str(e)}, status=500)
-@csrf_exempt
-def api_root(request):
-    return JsonResponse({
-        'status': 'success',
-        'message': 'Users API is working',
-        'available_endpoints': [
-            'POST /api/users/phone/send-code/',
-            'POST /api/users/phone/verify-code/',
-            'POST /api/users/phone/check-verification/',
-        ]
-    })
+    identifier, _method, error = _normalise_verification_identifier(request)
+    if error:
+        return Response({'error': error}, status=400)
+
+    verified = VerificationCode.objects.filter(
+        identifier=identifier,
+        is_verified=True,
+    ).exists()
+
+    return Response({'verified': verified}, status=200)
 
 
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def phone_login_or_register(request):
+def login_or_register(request):
     """
-    After phone verification, either:
-    1. Login existing user by phone number
-    2. Create new user and login
+    After verification, either login existing user or create new user.
+    Accepts 'identifier' (email or phone) and 'method' (optional, inferred).
     """
+    identifier = request.data.get('identifier')
+    platform = request.data.get('platform', 'ole')
+
+    if not identifier:
+        return Response({'error': 'Identifier required'}, status=400)
+
+    # Normalize and determine method
+    if '@' in identifier and '.' in identifier:
+        method = 'email'
+        identifier = identifier.lower()
+    else:
+        method = 'phone'
+        from .sms_services import format_phone_for_sms
+        formatted = format_phone_for_sms(identifier)
+        if not formatted:
+            return Response({'error': 'Invalid phone number'}, status=400)
+        identifier = formatted.lstrip('+')
+
+    # Check if verification exists and is verified
     try:
-        phone = request.data.get('phone_number')
-        platform = request.data.get('platform', 'ole')
-        
-        if not phone:
-            return Response({'error': 'Phone number is required'}, status=400)
-        
-        # Format phone
-        phone = format_phone_number(phone)
-        
-        logger.info(f"Phone login/register attempt for: {phone}")
-        
-        # Check if verification exists and is verified
-        try:
-            verification = PhoneVerification.objects.filter(
-                phone_number=phone,
-                is_verified=True
-            ).latest('created_at')
-        except PhoneVerification.DoesNotExist:
-            return Response({
-                'error': 'Phone number not verified. Please verify first.',
-                'verified': False
-            }, status=400)
-        
-        User = get_user_model()
-        
-        # ✅ Check if user already exists with this phone
-        user = User.objects.filter(phone_number=phone).first()
-        
-        if user:
-            # ✅ EXISTING USER - just login
-            is_new_user = False
-            logger.info(f"Existing user found: {user.email}")
-            
-            # Update full_name if it was auto-generated
-            if user.full_name.startswith('Student '):
-                user.full_name = f"Student {phone[-4:]}"
-                user.save()
+        verification = VerificationCode.objects.filter(
+            identifier=identifier,
+            is_verified=True
+        ).latest('created_at')
+    except VerificationCode.DoesNotExist:
+        return Response({
+            'error': 'Identifier not verified. Please verify first.',
+            'verified': False
+        }, status=400)
+
+    User = get_user_model()
+    if method == 'email':
+        user = User.objects.filter(email=identifier).first()
+    else:
+        user = User.objects.filter(phone_number=identifier).first()
+
+    is_new_user = False
+    if not user:
+        # Create new user
+        is_new_user = True
+        # Generate a random username and password
+        import uuid
+        random_suffix = str(uuid.uuid4())[:8]
+        if method == 'email':
+            # email is already unique, use as identifier
+            username = f"user_{random_suffix}"
+            email = identifier
+            phone_number = None
         else:
-            # ✅ NEW USER - create account
-            is_new_user = True
-            random_suffix = get_random_string(6).lower()
-            email = f"phone_{phone[-8:]}_{random_suffix}@ischool.ng"
-            username = f"ole_{phone[-6:]}_{random_suffix[:4]}"
-            
-            # Ensure unique username
-            counter = 1
-            base_username = username
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
-            
-            # Ensure unique email
-            counter = 1
-            base_email = email
-            while User.objects.filter(email=email).exists():
-                email = f"phone_{phone[-8:]}_{random_suffix}_{counter}@ischool.ng"
-                counter += 1
-            
-            # Create user
-            user = User(
-                email=email,
-                phone_number=phone,
-                username=username,
-                full_name=f"Student {phone[-4:]}",
-                role='ole_student' if platform == 'ole' else 'student',
-                is_active=True,
-            )
-            
-            # Set an unusable password (phone auth doesn't need passwords)
-            user.set_unusable_password()
-            
-            try:
-                user.save()
-                logger.info(f"New user created: {user.email} with phone {phone}")
-            except Exception as e:
-                logger.error(f"Failed to save user: {str(e)}")
-                raise
-            
-            # Create OLE profile if applicable
-            if platform == 'ole':
-                try:
-                    OleStudentProfile.objects.get_or_create(user=user)
-                except Exception as e:
-                    logger.error(f"Failed to create OLE profile: {e}")
-        
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        
-        response_data = {
-            'message': 'Login successful',
-            'user': {
-                'id': user.id,
-                'full_name': user.full_name,
-                'phone_number': user.phone_number,
-                'email': user.email,
-                'username': user.username,
-                'role': user.role,
-            },
-            'tokens': {
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-            },
-            'is_new_user': is_new_user
-        }
-        
-        return Response(response_data)
-        
-    except Exception as e:
-        logger.error(f"Phone login/register error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return Response(
-            {'error': f'Server error: {str(e)}'}, 
-            status=500
+            # phone
+            username = f"user_{random_suffix}"
+            email = None
+            phone_number = identifier
+
+        # Ensure username uniqueness
+        while User.objects.filter(username=username).exists():
+            random_suffix = str(uuid.uuid4())[:8]
+            username = f"user_{random_suffix}"
+
+        # Create user with unusable password (OTP login)
+        user = User(
+            email=email,
+            phone_number=phone_number,
+            username=username,
+            full_name=f"{'Student' if platform=='ole' else 'User'} {identifier[-4:]}",
+            role='ole_student' if platform == 'ole' else 'student',
+            is_active=True
         )
+        user.set_unusable_password()
+        user.save()
+
+        # Create OLE profile if needed
+        if platform == 'ole':
+            try:
+                OleStudentProfile.objects.get_or_create(user=user)
+            except:
+                pass
+
+    # Generate JWT tokens
+    refresh = RefreshToken.for_user(user)
+
+    response_data = {
+        'message': 'Login successful',
+        'user': {
+            'id': user.id,
+            'full_name': user.full_name,
+            'phone_number': user.phone_number,
+            'email': user.email,
+            'username': user.username,
+            'role': user.role,
+        },
+        'tokens': {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        },
+        'is_new_user': is_new_user
+    }
+
+    return Response(response_data)
+
 
 
 @csrf_exempt

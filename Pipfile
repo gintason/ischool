@@ -12,7 +12,6 @@ djangorestframework-simplejwt = "*"
 xhtml2pdf = "*"
 django-cors-headers = "*"
 random-password-generator = "*"
-sendgrid = "*"
 python-decouple = "*"
 openai = "*"
 python-dotenv = "*"
@@ -24,6 +23,10 @@ django-filter = "*"
 psycopg = {extras = ["binary"], version = "*"}
 celery = "*"
 redis = "*"
+dj-database-url = "*"
+pandas = "*"
+ecdsa = "*"
+sendgrid = "*"
 
 [dev-packages]
 
