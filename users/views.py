@@ -10,7 +10,7 @@ from .serializers import (UserRegistrationSerializer,
 
 from .models import RegistrationGroup, OlePaymentVerification
 from .permissions import  IsTeacherUser, IsStudentUser, IsParentUser, IsAdminUser, IsOleStudentUser
-from .serializers import CustomUserSerializer
+from .serializers import CustomUserSerializer 
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework.permissions import IsAuthenticated
@@ -26,7 +26,7 @@ from django.conf import settings
 from dj_rest_auth.views import LoginView
 from emails.sendgrid_email import send_email
 from datetime import timedelta
-from .models import OleStudentSubjectAccess, AdminActionLog 
+from .models import OleStudentSubjectAccess, AdminActionLog
 from django.utils import timezone
 from users.models import OleStudentSubscription, OleStudentProfile, SubscriptionPlan
 from .serializers import OleStudentProfileSerializer
@@ -49,7 +49,6 @@ from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import PhoneVerification
 from .sms_services import send_sms
 import logging
 import threading
