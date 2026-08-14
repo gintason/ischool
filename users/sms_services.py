@@ -1,165 +1,194 @@
-# users/sms_service.py
-import africastalking
+# users/sms_services.py
 import logging
+import threading
+
+import africastalking
 from django.conf import settings
 from django.core.mail import send_mail
 
-
 logger = logging.getLogger(__name__)
 
-# Initialize Africa's Talking
-africastalking.initialize(
-    username=settings.AFRICASTALKING_USERNAME,
-    api_key=settings.AFRICASTALKING_API_KEY
-)
+AT_USERNAME = getattr(settings, 'AFRICASTALKING_USERNAME', '')
+AT_API_KEY = getattr(settings, 'AFRICASTALKING_API_KEY', '')
 
-# Get the SMS service
-sms = africastalking.SMS
+if AT_USERNAME and AT_API_KEY:
+    africastalking.initialize(
+        username=AT_USERNAME,
+        api_key=AT_API_KEY,
+    )
+    sms = africastalking.SMS
+else:
+    sms = None
+    logger.warning("Africa's Talking credentials are not configured.")
+
 
 def format_phone_for_sms(phone_number):
     """
-    Normalise a Nigerian number to E.164 (+234XXXXXXXXXX).
-
-    A valid Nigerian mobile is the country code 234 followed by a 10-digit
-    subscriber number that starts with a 7/8/9 (e.g. 803..., 703..., 913...).
-    Locally people write it as 0803... (11 digits). This strips spaces, dashes,
-    and any leading 0 / +234 / 234, then validates the result — returning None
-    for anything that isn't a real 10-digit subscriber number, so we never hand
-    Africa's Talking an InvalidPhoneNumber.
+    Normalize Nigerian mobile numbers to E.164: +234XXXXXXXXXX.
+    Accepts 08031234567, 8031234567, 2348031234567, or +2348031234567.
     """
     if not phone_number:
         return None
 
-    # Keep digits only (drops spaces, dashes, parentheses, leading +).
-    digits = "".join(ch for ch in str(phone_number) if ch.isdigit())
+    digits = ''.join(char for char in str(phone_number) if char.isdigit())
 
-    # Peel off whichever country/trunk prefix is present, leaving 10 subscriber digits.
-    if digits.startswith("234") and len(digits) == 13:
+    if digits.startswith('234') and len(digits) == 13:
         subscriber = digits[3:]
-    elif digits.startswith("0") and len(digits) == 11:
+    elif digits.startswith('0') and len(digits) == 11:
         subscriber = digits[1:]
     elif len(digits) == 10:
         subscriber = digits
     else:
-        return None  # not a recognisable NG mobile
-
-    # Nigerian mobile subscriber numbers start 7, 8, or 9.
-    if len(subscriber) != 10 or subscriber[0] not in "789":
         return None
 
-    return "+234" + subscriber
+    if len(subscriber) != 10 or subscriber[0] not in '789':
+        return None
+
+    return '+234' + subscriber
+
 
 def send_sms(phone_number, code):
     formatted_phone = format_phone_for_sms(phone_number)
+
     if not formatted_phone:
-        logger.error("Rejecting invalid phone number before send: %r", phone_number)
+        logger.error('Invalid phone number for SMS: %r', phone_number)
         return False
-    
-    is_test_mode = getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox'
-    
-    if is_test_mode:
-        # Sandbox never delivers real SMS. Log at debug so the code is visible in
-        # local dev but not in production logs (which run at INFO+).
-        logger.debug("SANDBOX SMS to %s: code %s", formatted_phone, code)
+
+    if not sms:
+        logger.error("Africa's Talking SMS service is unavailable.")
+        return False
+
+    if AT_USERNAME == 'sandbox':
+        logger.debug('Sandbox SMS to %s: code %s', formatted_phone, code)
         return True
-    
+
+    sender_id = str(
+        getattr(settings, 'AFRICASTALKING_SENDER_ID', '') or ''
+    ).strip()
+
+    options = {
+        'message': (
+            'Your iSchool verification code is '
+            + str(code)
+            + '. Valid for 10 minutes, one-time use only.'
+        ),
+        'recipients': [formatted_phone],
+        'enqueue': True,
+    }
+
+    if sender_id:
+        options['sender_id'] = sender_id
+
     try:
-        message = f"Your iSchool verification code is {code}. Valid for 10 minutes, one-time use only."
-        
-        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
-        
         logger.info("Sending SMS via Africa's Talking to %s", formatted_phone)
-
-
-
-        
-        # Use enqueue parameter to bypass DND
-        options = {
-            "message": message,
-            "recipients": [formatted_phone],
-            "enqueue": True  # ✅ This helps bypass DND for transactional messages
-        }
-        
-        if sender_id:
-            options["sender_id"] = sender_id
-        
         response = sms.send(**options)
-        
-        logger.debug("AT response received")
-        logger.info(f"SMS sent to {formatted_phone}: {response}")
-        
-        if response and isinstance(response, dict):
-            recipients = response.get('SMSMessageData', {}).get('Recipients', [])
-            if recipients:
-                recipient = recipients[0]
-                status = recipient.get('status')
-                if status == 'Success':
-                    message_id = recipient.get('messageId')
-                    logger.info("SMS sent, id=%s", message_id)
-                    return True
-                else:
-                    reason = f"{status} (code: {recipient.get('statusCode')})"
-                    logger.error("SMS rejected by Africa's Talking for %s: %s", formatted_phone, reason)
-                    return False
-            logger.error("SMS: no recipients in AT response for %s: %s", formatted_phone, response)
+
+        recipients = (
+            response.get('SMSMessageData', {}).get('Recipients', [])
+            if isinstance(response, dict)
+            else []
+        )
+
+        if not recipients:
+            logger.error(
+                "Africa's Talking returned no recipient result for %s: %s",
+                formatted_phone,
+                response,
+            )
+            return False
+
+        recipient = recipients[0]
+        status = recipient.get('status')
+
+        if status == 'Success':
+            logger.info(
+                'SMS accepted for %s, message id=%s',
+                formatted_phone,
+                recipient.get('messageId'),
+            )
+            return True
+
+        logger.error(
+            'SMS rejected for %s: %s (code: %s)',
+            formatted_phone,
+            status,
+            recipient.get('statusCode'),
+        )
         return False
 
-    except Exception as e:
-        # Common causes: exhausted AT credit, unregistered/!approved sender ID,
-        # invalid API key, or account still in sandbox. Surface it in logs.
-        logger.error("SMS send failed for %s: %s", formatted_phone, e, exc_info=True)
+    except Exception:
+        logger.exception("Africa's Talking SMS send failed for %s", formatted_phone)
         return False
-    
+
 
 def send_sms_auto_fallback(phone_number, code):
-    formatted_phone = format_phone_for_sms(phone_number)
-    if not formatted_phone:
-        logger.error("Rejecting invalid phone number before send: %r", phone_number)
-        return False
-    
-    if getattr(settings, 'AFRICASTALKING_USERNAME', '') == 'sandbox':
-        return send_sms(phone_number, code)
-    
+    """
+    Kept because the OTP view calls this function.
+    Add another provider here later if you need a real SMS fallback.
+    """
+    return send_sms(phone_number, code)
+
+
+def _send_otp_email_in_background(subject, message, recipient):
+    """
+    Uses the same Django SMTP mechanism as VerifyOleStudentPaymentView.
+    Runs in a daemon thread so SMTP cannot block the OTP API request.
+    """
     try:
-        message = f"Your iSchool verification code is {code}. Valid for 10 minutes."
-        sender_id = settings.AFRICASTALKING_SENDER_ID.strip() if settings.AFRICASTALKING_SENDER_ID else None
-        
-        logger.info("Sending SMS to %s", formatted_phone)
-        
-        options = {
-            "message": message,
-            "recipients": [formatted_phone],
-            "enqueue": True
-        }
-        
-        if sender_id:
-            options["sender_id"] = sender_id
-        
-        response = sms.send(**options)
-        
-        logger.debug("AT API response received")
-        
-        if response and isinstance(response, dict):
-            recipients = response.get('SMSMessageData', {}).get('Recipients', [])
-            if recipients:
-                status = recipients[0].get('status')
-                if status == 'Success':
-                    return True
-        
-        return False
-        
-    except Exception as e:
-        logger.error("SMS error: %s", e, exc_info=True)
-        return False
+        sent_count = send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+
+        if sent_count == 1:
+            logger.info('OTP email sent to %s', recipient)
+        else:
+            logger.error(
+                'SMTP accepted no OTP email for %s; send_mail returned %s',
+                recipient,
+                sent_count,
+            )
+    except Exception:
+        logger.exception('OTP email send failed for %s', recipient)
+
 
 def send_email_code(email, code):
-    """Send OTP code via email."""
-    subject = "Your iSchool verification code"
-    message = f"Your iSchool verification code is {code}. It expires in 10 minutes."
-    from_email = settings.DEFAULT_FROM_EMAIL
+    """
+    Queue an email OTP using the existing iSchool SMTP configuration.
+
+    True means the email was successfully queued in a background thread.
+    The actual SMTP result is recorded in the Render logs.
+    """
+    email = str(email or '').strip().lower()
+
+    if not email:
+        logger.error('Cannot send OTP email: empty recipient.')
+        return False
+
+    subject = 'Your iSchool verification code'
+    message = (
+        'Hello,\n\n'
+        'Your iSchool verification code is: '
+        + str(code)
+        + '\n\n'
+        'This code expires in 10 minutes and can only be used once.\n\n'
+        'If you did not request this code, you can ignore this email.\n\n'
+        'Regards,\n'
+        'iSchool Team'
+    )
+
     try:
-        send_mail(subject, message, from_email, [email], fail_silently=False)
+        threading.Thread(
+            target=_send_otp_email_in_background,
+            args=(subject, message, email),
+            daemon=True,
+        ).start()
+
+        logger.info('OTP email queued for %s', email)
         return True
-    except Exception as e:
-        logger.error(f"Email send failed for {email}: {e}")
+    except Exception:
+        logger.exception('Could not queue OTP email for %s', email)
         return False

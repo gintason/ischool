@@ -160,6 +160,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_USE_SSL = True
 DEFAULT_FROM_EMAIL = 'noreply@ischool.ng'
 CONTACT_EMAIL = "admin@ischool.ng"
+EMAIL_TIMEOUT = 10
 
 # ============================================
 # CORS SETTINGS - Production Ready
