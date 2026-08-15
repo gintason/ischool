@@ -9,7 +9,7 @@ from django.conf import settings
 from .models import StudentSlot
 import secrets
 import string
-import json
+
 
 def generate_secure_password(length=10):
     """A random, human-typable password. Ambiguous characters removed so the
@@ -181,62 +181,19 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 OLE_PLAN_CHOICES = [
     ('monthly', 'Monthly'),
 ]
+
 class OleStudentRegistrationSerializer(serializers.Serializer):
     full_name = serializers.CharField()
     email = serializers.EmailField()
     plan_type = serializers.ChoiceField(choices=OLE_PLAN_CHOICES)
     class_level_id = serializers.IntegerField()
     subject_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.IntegerField(), 
         allow_empty=False,
         help_text="List of subject IDs the student is registering for"
     )
 
-    def to_internal_value(self, data):
-        # Make a mutable copy
-        data = data.copy() if hasattr(data, 'copy') else dict(data)
-
-        # ---- Normalize class_level_id ----
-        if 'class_level_id' in data and isinstance(data['class_level_id'], str):
-            try:
-                data['class_level_id'] = int(data['class_level_id'])
-            except (ValueError, TypeError):
-                raise serializers.ValidationError({
-                    "class_level_id": "Must be a valid integer."
-                })
-
-        # ---- Normalize subject_ids ----
-        if 'subject_ids' in data:
-            raw = data['subject_ids']
-
-            # If it's a string, try JSON first, then comma-separated
-            if isinstance(raw, str):
-                try:
-                    parsed = json.loads(raw)
-                except json.JSONDecodeError:
-                    parsed = [s.strip() for s in raw.split(',') if s.strip()]
-                raw = parsed
-
-            # If it's a single number, wrap in list
-            if isinstance(raw, (int, str)):
-                raw = [raw]
-
-            # Ensure it's a list
-            if not isinstance(raw, list):
-                raise serializers.ValidationError({
-                    "subject_ids": "Expected a list of integers."
-                })
-
-            # Convert each item to int
-            try:
-                data['subject_ids'] = [int(x) for x in raw]
-            except (ValueError, TypeError):
-                raise serializers.ValidationError({
-                    "subject_ids": "All subject IDs must be integers."
-                })
-
-        return super().to_internal_value(data)
-
+    
     def validate_email(self, value):
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
