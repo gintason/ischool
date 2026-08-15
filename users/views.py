@@ -2,6 +2,7 @@ from django.utils.crypto import get_random_string
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+import re
 from .sms_services import send_email_code, send_sms_auto_fallback
 from .serializers import (UserRegistrationSerializer, 
                           CustomTokenObtainPairSerializer, OleStudentRegistrationSerializer, 
@@ -57,12 +58,7 @@ from .models import VerificationCode
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from django.core.validators import validate_email
-from django.core.exceptions import ValidationError
-from rest_framework import status
-from rest_framework.throttling import AnonRateThrottle
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -269,78 +265,16 @@ class OleStudentRegistrationView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.info("OLE Registration Request Data: %s", request.data)
+        serializer = OleStudentRegistrationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        data = request.data
+        email = serializer.validated_data["email"].lower()
+        full_name = serializer.validated_data["full_name"]
+        plan_type = serializer.validated_data["plan_type"]
+        class_level_id = serializer.validated_data["class_level_id"]
+        subject_ids = serializer.validated_data["subject_ids"]
 
-        # ---------- Manual extraction & validation ----------
-        email = str(data.get("email", "")).strip().lower()
-        full_name = str(data.get("full_name", "")).strip()
-        plan_type = str(data.get("plan_type", "monthly")).strip().lower()
-        class_level_id_raw = data.get("class_level_id")
-        subject_ids_raw = data.get("subject_ids")
-
-        errors = {}
-
-        # Email validation
-        if not email:
-            errors["email"] = "Email is required."
-        else:
-            try:
-                validate_email(email)
-            except ValidationError:
-                errors["email"] = "Enter a valid email address."
-
-        # Full name
-        if not full_name:
-            errors["full_name"] = "Full name is required."
-
-        # Plan type
-        allowed_plan_types = {"monthly", "yearly"}
-        if plan_type not in allowed_plan_types:
-            errors["plan_type"] = f"Plan type must be one of: {', '.join(allowed_plan_types)}."
-
-        # Class level ID
-        try:
-            class_level_id = int(class_level_id_raw)
-        except (TypeError, ValueError):
-            errors["class_level_id"] = "Class level ID must be a valid integer."
-            class_level_id = None
-
-        # Subject IDs
-        if subject_ids_raw is None:
-            subject_ids = []
-        elif isinstance(subject_ids_raw, list):
-            subject_ids = subject_ids_raw
-        elif isinstance(subject_ids_raw, str):
-            # Try JSON parsing first
-            try:
-                subject_ids = json.loads(subject_ids_raw)
-                if not isinstance(subject_ids, list):
-                    raise ValueError("Not a list")
-            except (json.JSONDecodeError, ValueError):
-                # Fallback: split by comma
-                subject_ids = [s.strip() for s in subject_ids_raw.split(",") if s.strip()]
-        else:
-            # Single value → wrap in list
-            subject_ids = [subject_ids_raw]
-
-        # Convert subject IDs to integers, ignore invalid
-        try:
-            subject_ids = [int(s) for s in subject_ids]
-        except (TypeError, ValueError):
-            errors["subject_ids"] = "Subject IDs must be a list of integers."
-            subject_ids = []
-
-        if not subject_ids:
-            errors["subject_ids"] = "At least one subject ID is required."
-
-        # If any errors, return 400
-        if errors:
-            logger.error("OLE Registration validation errors: %s", errors)
-            return Response({"detail": errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        # ---------- Continue with original logic ----------
         AdminActionLog.objects.create(
             action_type="registration_attempt",
             email=email,
@@ -349,19 +283,27 @@ class OleStudentRegistrationView(APIView):
 
         try:
             class_level = OleClassLevel.objects.get(id=class_level_id)
+            if not subject_ids:
+                return Response({"detail": "No subjects selected."}, status=400)
+
             subjects = OleSubject.objects.filter(id__in=subject_ids)
             if not subjects.exists():
                 return Response({"detail": "Invalid subject selection."}, status=400)
+
         except OleClassLevel.DoesNotExist:
             return Response({"detail": "Invalid class level selected."}, status=400)
 
-        # OLE currently offers the monthly plan only.
+        # ✅ DO NOT create user here anymore — let payment verification handle it
+
+        # OLE currently offers the monthly plan only. plan_type is captured for
+        # future use but the plan/amount are resolved from the monthly config.
         plan_id = settings.PAYSTACK_PLAN_IDS.get("monthly")
         amount = settings.PAYSTACK_PLAN_AMOUNTS.get("monthly")
 
         if not plan_id or not amount:
             logger.error(
-                "OLE plan misconfigured: plan_id=%r amount=%r",
+                "OLE plan misconfigured: plan_id=%r amount=%r. Check "
+                "PAYSTACK_PLAN_IDS/PAYSTACK_PLAN_AMOUNTS in settings.",
                 plan_id, amount,
             )
             return Response(
@@ -369,18 +311,19 @@ class OleStudentRegistrationView(APIView):
                 status=500,
             )
 
+        # ✅ Decide callback URL
         is_mobile = request.data.get("is_mobile", False)
         if is_mobile:
-            callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"
+            callback_url = "https://api.ischool.ng/api/payments/payment-callback/?ole=true"  # 👈 deep link back to mobile app
         else:
-            callback_url = settings.OLE_PAYMENT_CALLBACK_URL
+            callback_url = settings.OLE_PAYMENT_CALLBACK_URL  # 👈 default (web)
 
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
             "Content-Type": "application/json",
         }
 
-        paystack_data = {
+        data = {
             "email": email,
             "amount": amount,
             "plan": plan_id,
@@ -392,7 +335,7 @@ class OleStudentRegistrationView(APIView):
                 "is_ole_student": True,
                 "class_level_id": class_level_id,
                 "subject_ids": subject_ids,
-                "is_mobile": is_mobile,
+                "is_mobile": is_mobile,  # 👈 tracked for debugging
             },
         }
 
@@ -401,7 +344,7 @@ class OleStudentRegistrationView(APIView):
         try:
             response = requests.post(
                 "https://api.paystack.co/transaction/initialize",
-                json=paystack_data,
+                json=data,
                 headers=headers
             )
             result = response.json()
@@ -422,6 +365,9 @@ class OleStudentRegistrationView(APIView):
             return Response({"authorization_url": result["data"]["authorization_url"]}, status=200)
 
         paystack_message = result.get("message", "Unknown error")
+        # "Plan not found" here means the configured PAYSTACK_PLAN_IDS['monthly']
+        # does not exist in the Paystack account tied to the current secret key
+        # (usually a test-vs-live key/plan mismatch, or a deleted plan).
         logger.error(
             "Paystack init failed for %s. plan_id=%s message=%r",
             email, plan_id, paystack_message,
@@ -431,10 +377,12 @@ class OleStudentRegistrationView(APIView):
             email=email,
             details=f"Paystack init failed (plan_id={plan_id}): {paystack_message}"
         )
-        return Response(
-            {"error": "We could not start your payment. Please try again shortly, or contact support."},
-            status=400
+        user_message = (
+            "We could not start your payment. Please try again shortly, or "
+            "contact support if this continues."
         )
+        return Response({"error": user_message, "gateway_message": paystack_message}, status=400)
+
 
 
 class VerifyOleStudentPaymentView(APIView):
@@ -657,7 +605,11 @@ class OleStudentDashboardView(APIView):
 
         serializer = OleStudentDashboardSerializer(user)
         return Response(serializer.data, status=200)
+    
+
 # Example of Parent View
+class ParentResultsView(APIView):
+    permission_classes = [IsParentUser]  # Only parents can view their child's results
 
     def get(self, request):
         # Example action: Get child's results (assuming parent is related to student)
