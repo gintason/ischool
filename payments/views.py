@@ -396,13 +396,127 @@ def verify_and_register(request):
 logger = logging.getLogger(__name__)
 
 
-def verify_paystack_signature(payload, expected_signature):
+def _get_paystack_secret_key():
+    return str(
+        getattr(settings, 'PAYSTACK_SECRET_KEY', '') or ''
+    ).strip()
+
+
+def _paystack_hmac(secret_key, body):
+    return hmac.new(
+        secret_key.encode('utf-8'),
+        body,
+        digestmod=hashlib.sha512,
+    ).hexdigest()
+
+
+def verify_paystack_signature(raw_body, received_signature, secret_key):
     """
-    Verify that the webhook request is actually from Paystack
+    Verify Paystack's HMAC-SHA512 webhook signature.
+
+    First checks the raw request bytes. If Paystack signed the canonical JSON
+    representation, it safely checks that equivalent representation as well.
     """
-    secret = settings.PAYSTACK_SECRET_KEY.encode('utf-8')
-    computed_signature = hmac.new(secret, payload, digestmod=hashlib.sha512).hexdigest()
-    return hmac.compare_digest(computed_signature, expected_signature or '')
+    if not received_signature or not secret_key:
+        return False
+
+    raw_signature = _paystack_hmac(secret_key, raw_body)
+    if hmac.compare_digest(raw_signature, received_signature):
+        return True
+
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+        canonical_body = json.dumps(
+            payload,
+            separators=(',', ':'),
+            ensure_ascii=False,
+        ).encode('utf-8')
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    canonical_signature = _paystack_hmac(secret_key, canonical_body)
+    return hmac.compare_digest(canonical_signature, received_signature)
+
+def _handle_paystack_webhook(request):
+    raw_body = request.body
+    received_signature = request.headers.get('x-paystack-signature', '')
+    secret_key = _get_paystack_secret_key()
+
+    if not secret_key or not secret_key.startswith('sk_'):
+        logger.error(
+            'PAYSTACK_SECRET_KEY is missing or is not a Paystack secret key.'
+        )
+        return JsonResponse(
+            {'error': 'Payment configuration error'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    if not verify_paystack_signature(
+        raw_body,
+        received_signature,
+        secret_key,
+    ):
+        key_mode = 'test' if secret_key.startswith('sk_test_') else 'live'
+        logger.warning(
+            'Invalid Paystack signature received. key_mode=%s body_bytes=%s',
+            key_mode,
+            len(raw_body),
+        )
+        return JsonResponse(
+            {'error': 'Invalid signature'},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse(
+            {'error': 'Invalid request body'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    event = payload.get('event')
+    if event != 'charge.success':
+        logger.info('Ignoring verified Paystack event: %s', event)
+        return JsonResponse({'status': 'ignored'}, status=200)
+
+    reference = payload.get('data', {}).get('reference')
+    if not reference:
+        logger.error('Verified Paystack webhook had no payment reference.')
+        return JsonResponse(
+            {'error': 'No reference provided'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        response = requests.get(
+            'https://api.paystack.co/transaction/verify/' + reference,
+            headers={'Authorization': 'Bearer ' + secret_key},
+            timeout=15,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except requests.RequestException:
+        logger.exception(
+            'Could not verify Paystack transaction %s from webhook.',
+            reference,
+        )
+        return JsonResponse(
+            {'error': 'Failed to communicate with Paystack.'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    payment_status = result.get('data', {}).get('status')
+
+    if result.get('status') and payment_status == 'success':
+        logger.info('Verified Paystack webhook for reference %s', reference)
+        return JsonResponse({'status': 'success'}, status=200)
+
+    logger.warning(
+        'Paystack webhook reference %s did not verify as successful.',
+        reference,
+    )
+    return JsonResponse({'status': 'failed'}, status=200)
 
 
 
@@ -414,54 +528,7 @@ def payment_callback(request):
     logger.info("Request query parameters: %s", request.GET)
 
     if request.method == 'POST':
-        # ✅ Handle Paystack webhook
-        try:
-            raw_body = request.body
-            payload = json.loads(raw_body.decode('utf-8'))
-            logger.info("Webhook payload: %s", payload)
-
-            expected_signature = request.headers.get('x-paystack-signature')
-            if not verify_paystack_signature(raw_body, expected_signature):
-                logger.warning("Invalid Paystack signature received")
-                return JsonResponse({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
-
-            event = payload.get("event")
-            if event != "charge.success":
-                logger.info("Ignoring non-success event: %s", event)
-                return JsonResponse({"status": "ignored"}, status=status.HTTP_200_OK)
-
-            reference = payload.get("data", {}).get("reference")
-            if not reference:
-                logger.error("No reference in webhook payload")
-                return JsonResponse({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # ✅ Durable, atomic idempotency check
-            if not _claim_reference(reference):
-                logger.info("Duplicate webhook for reference %s ignored", reference)
-                return JsonResponse({"status": "ignored", "message": "Payment already processed"}, status=status.HTTP_200_OK)
-
-            headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
-            url = f"https://api.paystack.co/transaction/verify/{reference}"
-
-            try:
-                res = requests.get(url, headers=headers)
-                res.raise_for_status()
-                data = res.json()
-                logger.info("Verification response: %s", data)
-            except requests.exceptions.RequestException as e:
-                logger.error("Verification request failed: %s", e)
-                return JsonResponse({"error": "Failed to communicate with Paystack."}, status=status.HTTP_502_BAD_GATEWAY)
-
-            if data.get("status") and data["data"].get("status") == "success":
-                logger.info("Webhook: Payment %s verified successfully", reference)
-                return JsonResponse({"status": "success"}, status=status.HTTP_200_OK)
-            else:
-                logger.error("Webhook: Payment %s failed verification", reference)
-                return JsonResponse({"status": "failed"}, status=status.HTTP_200_OK)
-
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            logger.error("Invalid JSON/encoding in webhook payload")
-            return JsonResponse({"error": "Invalid request body"}, status=status.HTTP_400_BAD_REQUEST)
+        return _handle_paystack_webhook(request)
 
     elif request.method == 'GET':
         # ✅ Handle browser redirect from Paystack
