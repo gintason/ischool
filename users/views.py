@@ -436,7 +436,6 @@ class OleStudentRegistrationView(APIView):
 
 
 
-
 class VerifyOleStudentPaymentView(APIView):
     permission_classes = [AllowAny]
 
@@ -448,38 +447,31 @@ class VerifyOleStudentPaymentView(APIView):
         if not reference:
             logger.info("❌ Missing reference in request.")
             return Response({"error": "Missing reference."}, status=400)
-        
-        # ✅ FINAL FIX: Use a database transaction for an atomic and persistent idempotency check.
+
+        # Idempotency: ensure this reference is not processed twice
         try:
-            # Attempt to create a new record. This will fail if the reference already exists
-            # due to the 'unique=True' constraint on the PaymentVerification model.
             OlePaymentVerification.objects.create(reference=reference)
             logger.info(f"✅ Created new verification record for: {reference}")
         except IntegrityError:
-            # If the record already exists, catch the error and immediately return a success response.
             logger.warning(f"⚠️ Duplicate verification attempt for {reference} (DB check).")
             return Response(
                 {"status": "duplicate", "message": "Payment already processed."},
-                status=200
+                status=200,
             )
 
         logger.info(f"🔍 Verifying payment with reference: {reference}")
         verify_url = f"https://api.paystack.co/transaction/verify/{reference}"
-        headers = {
-            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-        }
+        headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
 
         try:
-            response = requests.get(verify_url, headers=headers)
+            response = requests.get(verify_url, headers=headers, timeout=15)
             result = response.json()
             logger.info(f"✅ PAYSTACK VERIFY RESULT: {json.dumps(result, indent=2)}")
         except Exception as e:
-            logger.info(f"❌ Error contacting Paystack: {str(e)}")
-            # Consider rolling back the PaymentVerification creation if Paystack is unavailable
-            # to allow for a future retry, though this adds complexity.
+            logger.error(f"❌ Error contacting Paystack: {str(e)}")
             return Response({"error": "Verification service unavailable."}, status=502)
 
-        if not (result.get("status") and result["data"].get("status") == "success"):
+        if not (result.get("status") and result.get("data", {}).get("status") == "success"):
             logger.info("❌ Payment verification failed or incomplete.")
             return Response({"error": "Payment verification failed or incomplete."}, status=400)
 
@@ -504,16 +496,13 @@ class VerifyOleStudentPaymentView(APIView):
 
         if user:
             logger.info(f"🔍 Found existing user: {email}")
-            if user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists():
-                logger.info("✅ Existing user is fully registered.")
-                # The frontend will receive the same 200 OK response with the same message and data.
-                return Response({
-                    "message": "Payment verified. Your account is already active.",
-                    "email": user.email,
-                    "temporary_password": None,
-                    "role": user.role
-                }, status=200)
-            else:
+            # Always generate a new temporary password so the user can log in now
+            password = get_random_string(8)
+            user.set_password(password)
+            user.save()
+            logger.info(f"🔑 Password reset for existing user: {email}")
+
+            if not (user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists()):
                 logger.info("⚠️ Existing user is incomplete. Proceeding to complete setup.")
         else:
             logger.info("🆕 Creating new user...")
@@ -529,29 +518,26 @@ class VerifyOleStudentPaymentView(APIView):
                 new_user_created = True
                 logger.info(f"✅ User created: {user.email}")
             except IntegrityError as e:
-                logger.info(f"❌ IntegrityError during user creation: {e}")
-                return Response({
-                    "error": "User creation failed — possibly due to duplicate or bad data."
-                }, status=400)
+                logger.error(f"❌ IntegrityError during user creation: {e}")
+                return Response({"error": "User creation failed — possibly due to duplicate or bad data."}, status=400)
             except Exception as e:
-                logger.info(f"❌ Unexpected error during user creation: {e}")
-                return Response({
-                    "error": f"Unexpected error during user creation: {str(e)}"
-                }, status=500)
+                logger.error(f"❌ Unexpected error during user creation: {e}")
+                return Response({"error": f"Unexpected error during user creation: {str(e)}"}, status=500)
 
-        # Step: Assign class and subjects
-        try:
-            class_level = OleClassLevel.objects.get(id=class_level_id)
-            subjects = OleSubject.objects.filter(id__in=subject_ids)
-            user.ole_class_level = class_level
-            user.save()
-            user.ole_subjects.set(subjects)
-            logger.info("✅ Class level and subjects assigned.")
-        except Exception as e:
-            logger.info(f"❌ Error assigning class/subjects: {e}")
-            return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
+        # Step: Assign class and subjects (for new or incomplete users)
+        if not (user.role == "ole_student" and user.ole_class_level and user.ole_subjects.exists()):
+            try:
+                class_level = OleClassLevel.objects.get(id=class_level_id)
+                subjects = OleSubject.objects.filter(id__in=subject_ids)
+                user.ole_class_level = class_level
+                user.save()
+                user.ole_subjects.set(subjects)
+                logger.info("✅ Class level and subjects assigned.")
+            except Exception as e:
+                logger.error(f"❌ Error assigning class/subjects: {e}")
+                return Response({"error": f"Error assigning class/subjects: {str(e)}"}, status=400)
 
-        # Step: Create subscription
+        # Step: Create subscription for this payment (always)
         try:
             now = timezone.now()
             duration = timedelta(days=30) if plan_type == "monthly" else timedelta(days=365)
@@ -562,7 +548,7 @@ class VerifyOleStudentPaymentView(APIView):
             )
             logger.info("✅ Subscription created successfully.")
         except Exception as e:
-            logger.info(f"❌ Subscription creation failed: {e}")
+            logger.error(f"❌ Subscription creation failed: {e}")
             return Response({"error": f"Subscription creation failed: {str(e)}"}, status=400)
 
         # Step: Send welcome email (non-blocking)
@@ -574,42 +560,62 @@ class VerifyOleStudentPaymentView(APIView):
                         message,
                         "noreply@ischool.ng",
                         [recipient],
-                        fail_silently=True
+                        fail_silently=True,
                     )
                 except Exception as e:
                     logger.error(f"❌ Async email send failed: {e}")
+
             threading.Thread(target=_send, daemon=True).start()
 
-        welcome_subject = "Welcome to iSchool Ole!"
-        welcome_message = f"""
-        Hello {full_name},
+        # Email content depends on whether this was a brand new account
+        if new_user_created:
+            subject = "Welcome to iSchool Ole!"
+            message = f"""
+Hello {full_name},
 
-        Your iSchool Ole account has been successfully created.
+Your iSchool Ole account has been successfully created.
 
-        Login Details:
-        Email: {email}
-        Password: {password or '[already set]'}
+Login Details:
+Email: {email}
+Password: {password}
 
-        Visit: https://www.ischool.ng/ole-student/login
+Visit: https://www.ischool.ng/ole-student/login
 
-        Best regards,  
-        iSchool Ole Team
-        """
+Best regards,  
+iSchool Ole Team
+"""
+        else:
+            subject = "Your iSchool Ole Login Details"
+            message = f"""
+Hello {full_name},
 
-        send_async_email(welcome_subject, welcome_message, email)
+Your payment has been received. Your login details are below.
+
+Login Details:
+Email: {email}
+Password: {password}
+
+Visit: https://www.ischool.ng/ole-student/login
+
+Best regards,  
+iSchool Ole Team
+"""
+
+        send_async_email(subject, message, email)
         logger.info(f"📨 Welcome email queued for: {email}")
 
-        # The frontend will receive the same response body and status codes.
-        return Response({
+        # Return response with password so the app can display it
+        response_data = {
             "message": (
                 "Payment verified and account created."
                 if new_user_created
-                else "Account completed successfully. Please copy your email and Password to login"
+                else "Payment verified. Your login details have been sent to your email."
             ),
             "email": email,
-            "temporary_password": password if new_user_created else None,
+            "temporary_password": password,
             "role": "ole_student",
-        }, status=201 if new_user_created else 200)
+        }
+        return Response(response_data, status=201 if new_user_created else 200)
 
 
 class OleStudentLoginView(LoginView):
