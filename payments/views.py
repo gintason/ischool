@@ -192,6 +192,7 @@ def initiate_payment(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def verify_and_register(request):
@@ -228,6 +229,10 @@ def verify_and_register(request):
     billing_cycle = data.get("billing_cycle", "monthly").lower()
     student_details = data.get("studentDetails", [])
 
+    # Support alternate key names from older clients
+    if not student_details:
+        student_details = data.get("student_details", data.get("students", []))
+
     # Parse student details if it was sent as a JSON string
     if isinstance(student_details, str):
         try:
@@ -243,6 +248,15 @@ def verify_and_register(request):
             {"detail": "studentDetails must be a list."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    # If no student details were provided but slots == 1,
+    # create a default student using the main payer's email and name.
+    if len(student_details) == 0 and slots == 1:
+        student_details = [{
+            "email": email,
+            "fullName": name or email,
+        }]
+        logger.info("No studentDetails provided; created default student for single slot.")
 
     # ---------- Required fields check ----------
     required_fields = {
