@@ -195,162 +195,225 @@ def initiate_payment(request):
 @api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 def verify_and_register(request):
-
     logger.info("Incoming payment verification request: %s", request.data)
     logger.info("Request headers: %s", request.headers)
 
     data = request.data
 
-    # Extract fields
-    transaction_id = data.get("transaction_id")  # This should match Paystack's reference
+    # ---------- Extract fields with safe fallbacks ----------
+    transaction_id = data.get("transaction_id")
     tx_ref = data.get("tx_ref") or transaction_id
+
+    if not tx_ref:
+        return Response(
+            {"detail": "transaction_id or tx_ref is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # If transaction_id was not provided, use tx_ref as the verification reference
+    if not transaction_id:
+        transaction_id = tx_ref
+
     email = data.get("email")
     account_type = data.get("account_type")
     state = data.get("state")
-    name = data.get("name")
-    location = data.get("location")
+
+    # name and location are optional; fallback to email/state
+    name = data.get("name") or email
+    location = data.get("location") or state
+
     slots = int(data.get("slots", 1))
     referral_code = (data.get("referral_code") or "").strip()
     account_details = (data.get("account_details") or "").strip()
     billing_cycle = data.get("billing_cycle", "monthly").lower()
     student_details = data.get("studentDetails", [])
 
-    # Parse student details if string
+    # Parse student details if it was sent as a JSON string
     if isinstance(student_details, str):
         try:
             student_details = json.loads(student_details)
         except json.JSONDecodeError:
-            return Response({"detail": "Invalid format for student details."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-    # Required fields check
-    required_fields = ["transaction_id", "tx_ref", "email", "account_type", "name", "location", "state"]
-    missing = [field for field in required_fields if not data.get(field)]
+            return Response(
+                {"detail": "Invalid format for student details."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    if not isinstance(student_details, list):
+        return Response(
+            {"detail": "studentDetails must be a list."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # ---------- Required fields check ----------
+    required_fields = {
+        "email": email,
+        "account_type": account_type,
+        "state": state,
+    }
+    missing = [field for field, value in required_fields.items() if not value]
 
     if missing:
         logger.error(
             "Missing required fields: %s | Received payload: %s",
-            ', '.join(missing),
-            data
+            ", ".join(missing),
+            data,
         )
         return Response(
             {
                 "detail": f"Missing required fields: {', '.join(missing)}",
-                "received": data  # 👈 extra info for debugging
+                "received": data,
             },
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-
-    # Slot count validation
+    # Slot count must match the number of student details provided
     if len(student_details) != slots:
-        return Response({"detail": "Number of student details does not match the number of slots."},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Number of student details does not match the number of slots."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-    # Prevent duplicate verification
-    if PaymentTransaction.objects.filter(transaction_id=transaction_id).exists():
-        return Response({"detail": "Transaction already verified."}, status=status.HTTP_200_OK)
+    # Prevent duplicate verification (check both transaction_id and tx_ref)
+    if (
+        PaymentTransaction.objects.filter(transaction_id=transaction_id).exists()
+        or PaymentTransaction.objects.filter(tx_ref=tx_ref).exists()
+    ):
+        return Response(
+            {"detail": "Transaction already verified."},
+            status=status.HTTP_200_OK,
+        )
 
-    # Verify with Paystack
+    # ---------- Verify with Paystack ----------
     paystack_url = f"https://api.paystack.co/transaction/verify/{transaction_id}"
     headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
 
     try:
-        res = requests.get(paystack_url, headers=headers)
+        res = requests.get(paystack_url, headers=headers, timeout=15)
         res_data = res.json()
         logger.info("Paystack verification response: %s", res_data)
-    except Exception as e:
-        logger.error("Paystack verification failed: %s", e)
-        return Response({"detail": f"Paystack verification failed: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
+    except requests.exceptions.RequestException as e:
+        logger.error("Paystack verification request error: %s", e)
+        return Response(
+            {"detail": f"Paystack verification failed: {str(e)}"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    except ValueError as e:
+        logger.error("Paystack returned invalid JSON: %s", e)
+        return Response(
+            {"detail": "Invalid response from Paystack."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
     if not res_data.get("status"):
-        return Response({"detail": "Transaction verification failed."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Transaction verification failed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-    # Amount check
-    # ⚠️ UNIT BUG (fixed): Paystack reports `amount` in KOBO, and
-    # SLOT_PRICE_MONTHLY / SLOT_PRICE_YEARLY are ALSO stored in kobo
-    # (10000 == ₦100). The old code divided the paid amount by 100 (converting
-    # it to naira) and then compared it against a kobo figure, so the check was
-    # naira < kobo — e.g. 100 < 10000 — and EVERY payment was rejected with
-    # "Amount paid does not match expected slot payment."
-    # Compare in kobo; keep a naira value for storage/display.
-    amount_paid_kobo = float(res_data.get("data", {}).get("amount", 0))
-    amount_paid = amount_paid_kobo / 100  # naira, used for PaymentTransaction
+    # ---------- Amount check in KOBO ----------
+    data_payload = res_data.get("data") or {}
+    amount_paid_kobo = float(data_payload.get("amount", 0))
+    amount_paid = amount_paid_kobo / 100  # Convert to naira for storage
+
     if billing_cycle not in ["monthly", "yearly"]:
         billing_cycle = "monthly"
 
-    slot_price = settings.SLOT_PRICE_MONTHLY if billing_cycle == "monthly" else settings.SLOT_PRICE_YEARLY
-    expected_amount_kobo = slots * slot_price  # kobo, same unit as Paystack
+    slot_price = (
+        settings.SLOT_PRICE_MONTHLY
+        if billing_cycle == "monthly"
+        else settings.SLOT_PRICE_YEARLY
+    )
+    expected_amount_kobo = slots * slot_price
 
     if amount_paid_kobo < expected_amount_kobo:
-        return Response({"detail": "Amount paid does not match expected slot payment."}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Create group and users atomically
-    with transaction.atomic():
-        group = RegistrationGroup.objects.create(
-            account_type=account_type,
-            state=state,
-            name=name,
-            email=email,
-            location=location,
-            slots_applied=slots,
-            slots_remaining=slots,
-            referral_code=referral_code if account_type == "referral" else "",
-            account_details=account_details if account_type == "referral" else ""
+        return Response(
+            {"detail": "Amount paid does not match expected slot payment."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-        PaymentTransaction.objects.create(
-            registration_group=group,
-            transaction_id=transaction_id,
-            tx_ref=tx_ref,
-            amount=amount_paid,
-            verified=True,
-            status="successful",
-            timestamp=timezone.now()
-        )
-
-        created_users = []
-        account_type_to_role = {"school": "student", "home": "student", "referral": "student"}
-
-        for i, student in enumerate(student_details):
-            full_name = student.get("fullName", f"{account_type.capitalize()} User {i+1}")
-            student_email = student.get("email")
-
-            if not student_email:
-                transaction.set_rollback(True)
-                return Response({"detail": f"Missing email for student {i+1}."}, status=status.HTTP_400_BAD_REQUEST)
-
-            if CustomUser.objects.filter(email=student_email).exists():
-                transaction.set_rollback(True)
-                return Response({"detail": f"A user with email '{student_email}' already exists. Please use a different email."},
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            username = f"{account_type[:2].upper()}{timezone.now().strftime('%H%M%S%f')}{i}"
-            password = pwo.generate()
-            role = account_type_to_role.get(account_type, "student")
-
-            user = CustomUser.objects.create_user(
-                email=student_email,
-                password=password,
-                role=role,
-                full_name=full_name,
-                username=username,
-                registration_group=group
+    # ---------- Create group and users atomically ----------
+    try:
+        with transaction.atomic():
+            group = RegistrationGroup.objects.create(
+                account_type=account_type,
+                state=state,
+                name=name,
+                email=email,
+                location=location,
+                slots_applied=slots,
+                slots_remaining=slots,
+                referral_code=referral_code if account_type == "referral" else "",
+                account_details=account_details if account_type == "referral" else "",
             )
 
-            created_users.append({
-                "username": username,
-                "password": password,
-                "full_name": full_name,
-                "email": student_email
-            })
+            PaymentTransaction.objects.create(
+                registration_group=group,
+                transaction_id=transaction_id,
+                tx_ref=tx_ref,
+                amount=amount_paid,
+                verified=True,
+                status="successful",
+                timestamp=timezone.now(),
+            )
 
-    # Send login details email
+            created_users = []
+            account_type_to_role = {
+                "school": "student",
+                "home": "student",
+                "referral": "student",
+            }
+
+            for i, student in enumerate(student_details):
+                full_name = student.get("fullName") or f"{account_type.capitalize()} User {i+1}"
+                student_email = student.get("email")
+
+                if not student_email:
+                    transaction.set_rollback(True)
+                    return Response(
+                        {"detail": f"Missing email for student {i+1}."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                if CustomUser.objects.filter(email=student_email).exists():
+                    transaction.set_rollback(True)
+                    return Response(
+                        {"detail": f"A user with email '{student_email}' already exists. Please use a different email."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                username = f"{account_type[:2].upper()}{timezone.now().strftime('%H%M%S%f')}{i}"
+                password = pwo.generate()
+                role = account_type_to_role.get(account_type, "student")
+
+                user = CustomUser.objects.create_user(
+                    email=student_email,
+                    password=password,
+                    role=role,
+                    full_name=full_name,
+                    username=username,
+                    registration_group=group,
+                )
+
+                created_users.append({
+                    "username": username,
+                    "password": password,
+                    "full_name": full_name,
+                    "email": student_email,
+                })
+
+    except Exception as e:
+        logger.exception("Unexpected error during registration transaction: %s", e)
+        return Response(
+            {"detail": "Registration failed due to an internal error."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # ---------- Send login details email (non‑blocking) ----------
     login_details = "\n\n".join(
         f"{u['full_name']} ({u['email']})\nUsername: {u['username']}\nPassword: {u['password']}"
         for u in created_users
     )
-    
+
     def send_async_email(subject, message, recipient):
         def _send():
             try:
@@ -359,164 +422,71 @@ def verify_and_register(request):
                     message,
                     "noreply@ischool.ng",
                     [recipient],
-                    fail_silently=False
+                    fail_silently=False,
                 )
             except Exception as e:
-                logger.error("❌ Async email send failed for %s: %s", recipient, e, exc_info=True)
+                logger.error(
+                    "❌ Async email send failed for %s: %s",
+                    recipient,
+                    e,
+                    exc_info=True,
+                )
+
         threading.Thread(target=_send, daemon=True).start()
 
-    # Inside your registration logic
     try:
         email_subject = "Your iSchool Ola Login Details"
         email_message = f"""Dear User,
 
-    Welcome to iSchool Ola! Your registration was successful. Below are the login details for your registered slot(s):
+Welcome to iSchool Ola! Your registration was successful. Below are the login details for your registered slot(s):
 
-    {login_details}
+{login_details}
 
-    Login here: https://www.ischool.ng/student/login
+Login here: https://www.ischool.ng/student/login
 
-    Best regards,  
-    iSchool Ola Team
-    """
+Best regards,  
+iSchool Ola Team
+"""
         send_async_email(email_subject, email_message, email)
         logger.info(f"📨 Registration email queued for: {email}")
     except Exception as e:
-        logger.error("❌ Failed to queue registration email for %s: %s", email, e, exc_info=True)
+        logger.error(
+            "❌ Failed to queue registration email for %s: %s",
+            email,
+            e,
+            exc_info=True,
+        )
 
-    # ✅ Return success response immediately
-    return Response({
-        "detail": "Registration successful.",
-        "users": created_users,
-        "group_id": group.id,
-        "slots": slots
-    }, status=status.HTTP_201_CREATED)
+    return Response(
+        {
+            "detail": "Registration successful.",
+            "users": created_users,
+            "group_id": group.id,
+            "slots": slots,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 
 logger = logging.getLogger(__name__)
 
 
-def _get_paystack_secret_key():
-    return str(
-        getattr(settings, 'PAYSTACK_SECRET_KEY', '') or ''
-    ).strip()
+def verify_paystack_signature(payload: bytes, expected_signature: str) -> bool:
+    """
+    Verify that the webhook request is actually from Paystack.
+    Uses HMAC SHA512 with your Paystack secret key.
+    """
+    if not expected_signature:
+        return False
 
-
-def _paystack_hmac(secret_key, body):
-    return hmac.new(
-        secret_key.encode('utf-8'),
-        body,
-        digestmod=hashlib.sha512,
+    secret = settings.PAYSTACK_SECRET_KEY.strip().encode("utf-8")
+    computed_signature = hmac.new(
+        secret,
+        payload,
+        digestmod=hashlib.sha512
     ).hexdigest()
 
-
-def verify_paystack_signature(raw_body, received_signature, secret_key):
-    """
-    Verify Paystack's HMAC-SHA512 webhook signature.
-
-    First checks the raw request bytes. If Paystack signed the canonical JSON
-    representation, it safely checks that equivalent representation as well.
-    """
-    if not received_signature or not secret_key:
-        return False
-
-    raw_signature = _paystack_hmac(secret_key, raw_body)
-    if hmac.compare_digest(raw_signature, received_signature):
-        return True
-
-    try:
-        payload = json.loads(raw_body.decode('utf-8'))
-        canonical_body = json.dumps(
-            payload,
-            separators=(',', ':'),
-            ensure_ascii=False,
-        ).encode('utf-8')
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return False
-
-    canonical_signature = _paystack_hmac(secret_key, canonical_body)
-    return hmac.compare_digest(canonical_signature, received_signature)
-
-def _handle_paystack_webhook(request):
-    raw_body = request.body
-    received_signature = request.headers.get('x-paystack-signature', '')
-    secret_key = _get_paystack_secret_key()
-
-    if not secret_key or not secret_key.startswith('sk_'):
-        logger.error(
-            'PAYSTACK_SECRET_KEY is missing or is not a Paystack secret key.'
-        )
-        return JsonResponse(
-            {'error': 'Payment configuration error'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    if not verify_paystack_signature(
-        raw_body,
-        received_signature,
-        secret_key,
-    ):
-        key_mode = 'test' if secret_key.startswith('sk_test_') else 'live'
-        logger.warning(
-            'Invalid Paystack signature received. key_mode=%s body_bytes=%s',
-            key_mode,
-            len(raw_body),
-        )
-        return JsonResponse(
-            {'error': 'Invalid signature'},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    try:
-        payload = json.loads(raw_body.decode('utf-8'))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return JsonResponse(
-            {'error': 'Invalid request body'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    event = payload.get('event')
-    if event != 'charge.success':
-        logger.info('Ignoring verified Paystack event: %s', event)
-        return JsonResponse({'status': 'ignored'}, status=200)
-
-    reference = payload.get('data', {}).get('reference')
-    if not reference:
-        logger.error('Verified Paystack webhook had no payment reference.')
-        return JsonResponse(
-            {'error': 'No reference provided'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        response = requests.get(
-            'https://api.paystack.co/transaction/verify/' + reference,
-            headers={'Authorization': 'Bearer ' + secret_key},
-            timeout=15,
-        )
-        response.raise_for_status()
-        result = response.json()
-    except requests.RequestException:
-        logger.exception(
-            'Could not verify Paystack transaction %s from webhook.',
-            reference,
-        )
-        return JsonResponse(
-            {'error': 'Failed to communicate with Paystack.'},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
-
-    payment_status = result.get('data', {}).get('status')
-
-    if result.get('status') and payment_status == 'success':
-        logger.info('Verified Paystack webhook for reference %s', reference)
-        return JsonResponse({'status': 'success'}, status=200)
-
-    logger.warning(
-        'Paystack webhook reference %s did not verify as successful.',
-        reference,
-    )
-    return JsonResponse({'status': 'failed'}, status=200)
+    return hmac.compare_digest(computed_signature, expected_signature)
 
 
 
@@ -527,11 +497,85 @@ def payment_callback(request):
     logger.info("Incoming payment callback request: %s", request.method)
     logger.info("Request query parameters: %s", request.GET)
 
-    if request.method == 'POST':
-        return _handle_paystack_webhook(request)
+    if request.method == "POST":
+        # 1. Get raw body FIRST
+        raw_body = request.body
+        expected_signature = request.headers.get("x-paystack-signature")
+
+        # 2. Verify signature before doing anything else
+        if not verify_paystack_signature(raw_body, expected_signature):
+            logger.warning("Invalid Paystack signature received")
+            return JsonResponse(
+                {"error": "Invalid signature"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # 3. Now parse the body
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.error("Invalid JSON/encoding in webhook payload")
+            return JsonResponse(
+                {"error": "Invalid request body"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info("Webhook payload: %s", payload)
+
+        event = payload.get("event")
+        if event != "charge.success":
+            logger.info("Ignoring non-success event: %s", event)
+            return JsonResponse({"status": "ignored"}, status=status.HTTP_200_OK)
+
+        reference = payload.get("data", {}).get("reference")
+        if not reference:
+            logger.error("No reference in webhook payload")
+            return JsonResponse(
+                {"error": "No reference provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ----- Verify with Paystack FIRST -----
+        headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
+        url = f"https://api.paystack.co/transaction/verify/{reference}"
+
+        try:
+            res = requests.get(url, headers=headers, timeout=15)
+            res.raise_for_status()
+            data = res.json()
+            logger.info("Verification response: %s", data)
+        except requests.exceptions.RequestException as e:
+            logger.error("Verification request failed: %s", e)
+            # Do NOT claim the reference here — allow retries
+            return JsonResponse(
+                {"error": "Failed to communicate with Paystack."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except ValueError as e:
+            logger.error("Invalid JSON from Paystack: %s", e)
+            return JsonResponse(
+                {"error": "Invalid response from Paystack."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not (data.get("status") and data.get("data", {}).get("status") == "success"):
+            logger.error("Webhook: Payment %s failed verification", reference)
+            # Payment not successful, do not claim it
+            return JsonResponse({"status": "failed"}, status=status.HTTP_200_OK)
+
+        # ----- NOW claim the reference (idempotency) AFTER success -----
+        if not _claim_reference(reference):
+            logger.info("Duplicate webhook for reference %s ignored", reference)
+            return JsonResponse(
+                {"status": "ignored", "message": "Payment already processed"},
+                status=status.HTTP_200_OK,
+            )
+
+        logger.info("Webhook: Payment %s verified and processed successfully", reference)
+        return JsonResponse({"status": "success"}, status=status.HTTP_200_OK)
 
     elif request.method == 'GET':
-        # ✅ Handle browser redirect from Paystack
+        # Handle browser redirect from Paystack
         logger.info("Handling GET callback")
         reference = request.GET.get('reference') or request.GET.get('tx_ref')
         slots = request.GET.get('slots')
@@ -548,12 +592,15 @@ def payment_callback(request):
             url = f"https://api.paystack.co/transaction/verify/{reference}"
 
             try:
-                res = requests.get(url, headers=headers)
+                res = requests.get(url, headers=headers, timeout=15)
                 res.raise_for_status()
                 data = res.json()
                 logger.info("OLE verification response: %s", data)
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 logger.error("OLE verification failed: %s", e)
+                return JsonResponse({"error": "Verification failed"}, status=status.HTTP_502_BAD_GATEWAY)
+            except ValueError as e:
+                logger.error("Invalid JSON from Paystack: %s", e)
                 return JsonResponse({"error": "Verification failed"}, status=status.HTTP_502_BAD_GATEWAY)
 
             if data.get("status") and data["data"].get("status") == "success":
@@ -584,39 +631,42 @@ def payment_callback(request):
         if not reference:
             return JsonResponse({"error": "No reference found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ✅ Durable, atomic idempotency check for GET redirect
-        if not _claim_reference(reference):
-            logger.info("Duplicate GET callback for reference %s ignored", reference)
-            redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=duplicate"
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>Redirecting to App</title>
-                    <meta http-equiv="refresh" content="0; url={redirect_url}">
-                </head>
-                <body>
-                    <p>Redirecting... <a href="{redirect_url}">Click here</a> if not redirected.</p>
-                    <script>window.location.href = "{redirect_url}";</script>
-                </body>
-            </html>
-            """
-            return HttpResponse(html_content, content_type="text/html")
-
         headers = {"Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}"}
         url = f"https://api.paystack.co/transaction/verify/{reference}"
 
         try:
-            res = requests.get(url, headers=headers)
+            res = requests.get(url, headers=headers, timeout=15)
             res.raise_for_status()
             data = res.json()
             logger.info("Regular verification response: %s", data)
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logger.error("Verification failed: %s", e)
+            return JsonResponse({"error": "Failed to communicate with Paystack"}, status=status.HTTP_502_BAD_GATEWAY)
+        except ValueError as e:
+            logger.error("Invalid JSON from Paystack: %s", e)
             return JsonResponse({"error": "Failed to communicate with Paystack"}, status=status.HTTP_502_BAD_GATEWAY)
 
         if data.get("status") and data["data"].get("status") == "success":
+            # Now claim the reference for idempotency (after success)
+            if not _claim_reference(reference):
+                logger.info("Duplicate GET callback for reference %s ignored", reference)
+                redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=duplicate"
+                html_content = f"""
+                <!DOCTYPE html>
+                <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <title>Redirecting to App</title>
+                        <meta http-equiv="refresh" content="0; url={redirect_url}">
+                    </head>
+                    <body>
+                        <p>Redirecting... <a href="{redirect_url}">Click here</a> if not redirected.</p>
+                        <script>window.location.href = "{redirect_url}";</script>
+                    </body>
+                </html>
+                """
+                return HttpResponse(html_content, content_type="text/html")
+
             redirect_url = f"ischoolmobile://payment-callback?reference={reference}&slots={slots_to_pass}&status=success"
         else:
             redirect_url = f"ischoolmobile://payment-callback?reference={reference}&status=failed"
