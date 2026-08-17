@@ -160,72 +160,42 @@ class StudentLoginView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        username = str(request.data.get("username", "")).strip()
-        password = str(request.data.get("password", "")).strip()
+        username = request.data.get("username")
+        password = request.data.get("password")
 
         if not username or not password:
-            return Response(
-                {"error": "Username and password are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Log the attempt (but do not log the password in production)
-        logger.info(f"Login attempt for username: {username}")
-
-        # Try to find the user by username first
-        user = None
+        # Authenticate using username
         try:
-            user = CustomUser.objects.get(username=username)
+            user_obj = CustomUser.objects.get(username=username)
         except CustomUser.DoesNotExist:
-            # Fallback: maybe the user entered email instead of username
-            if '@' in username:
-                try:
-                    user = CustomUser.objects.get(email=username)
-                    logger.info(f"Fallback: found user by email: {user.email}")
-                except CustomUser.DoesNotExist:
-                    pass
+            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        if user is None:
-            logger.warning(f"User not found for username: {username}")
-            return Response(
-                {"error": "Invalid credentials."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        user = authenticate(request, username=user_obj.email, password=password)  # using email internally
 
-        # Verify password manually (works even if USERNAME_FIELD is email)
-        if not user.check_password(password):
-            logger.warning(f"Password check failed for user: {user.username}")
-            return Response(
-                {"error": "Invalid credentials."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+        if user is not None:
+            if user.role.lower() != "student":
+                return Response({"error": "User is not a student."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Check role
-        if user.role.lower() != "student":
-            logger.warning(f"User role is {user.role}, not student")
-            return Response(
-                {"error": "User is not a student."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            # ✅ Check subscription status
+            if user.registration_group and not user.registration_group.is_subscription_active():
+                return Response(
+                    {"detail": "Your subscription has expired. Please buy slots again to continue."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
-        # Check subscription status
-        if user.registration_group and not user.registration_group.is_subscription_active():
-            return Response(
-                {"detail": "Your subscription has expired. Please buy slots again to continue."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {
+            # ✅ Generate tokens
+            refresh = RefreshToken.for_user(user)
+            return Response({
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
                 "role": user.role,
-                "user_id": user.id,
-            },
-            status=status.HTTP_200_OK,
-        )
+                "user_id": user.id
+            }, status=status.HTTP_200_OK)
+
+        return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
 
 
 @api_view(['POST'])

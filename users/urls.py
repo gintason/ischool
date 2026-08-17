@@ -18,7 +18,6 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from dj_rest_auth.views import LoginView
 from . import views
-from rest_framework_simplejwt.views import TokenRefreshView
 
 
 urlpatterns = [
@@ -87,7 +86,4 @@ urlpatterns = [
     path('phone/login/', views.login_or_register, name='phone-login'),
     path('phone/logout/', views.phone_logout, name='phone-logout'),
     path('profile/', views.get_user_profile, name='user-profile'),
-
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
 ]
