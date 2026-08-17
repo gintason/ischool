@@ -164,37 +164,52 @@ class StudentLoginView(generics.GenericAPIView):
         password = request.data.get("password")
 
         if not username or not password:
-            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Username and password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Authenticate using username
+        # Find user by the actual username field (auto-generated username)
         try:
-            user_obj = CustomUser.objects.get(username=username)
+            user = CustomUser.objects.get(username=username)
         except CustomUser.DoesNotExist:
-            return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"error": "Invalid credentials."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-        user = authenticate(request, username=user_obj.email, password=password)  # using email internally
+        # Verify password manually (do NOT rely on authenticate() when USERNAME_FIELD is email)
+        if not user.check_password(password):
+            return Response(
+                {"error": "Invalid credentials."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-        if user is not None:
-            if user.role.lower() != "student":
-                return Response({"error": "User is not a student."}, status=status.HTTP_403_FORBIDDEN)
+        # Check role
+        if user.role.lower() != "student":
+            return Response(
+                {"error": "User is not a student."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-            # ✅ Check subscription status
-            if user.registration_group and not user.registration_group.is_subscription_active():
-                return Response(
-                    {"detail": "Your subscription has expired. Please buy slots again to continue."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        # Check subscription status (if applicable)
+        if user.registration_group and not user.registration_group.is_subscription_active():
+            return Response(
+                {"detail": "Your subscription has expired. Please buy slots again to continue."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-            # ✅ Generate tokens
-            refresh = RefreshToken.for_user(user)
-            return Response({
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        return Response(
+            {
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
                 "role": user.role,
-                "user_id": user.id
-            }, status=status.HTTP_200_OK)
-
-        return Response({"error": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+                "user_id": user.id,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 
