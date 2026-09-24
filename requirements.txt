@@ -21,7 +21,7 @@ cssselect2==0.8.0
 distro==1.9.0
 dj-database-url==3.1.2
 dj-rest-auth==7.0.1
-Django==6.0.8
+Django==5.2.13
 django-allauth==65.7.0
 django-celery-beat==2.9.0
 django-cors-headers==4.7.0
