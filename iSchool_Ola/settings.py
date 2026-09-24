@@ -86,12 +86,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "iSchool_Ola.wsgi.application"
 
-# Database 
+# Database
+# ssl_require is now only enforced outside DEBUG, so local dev against a
+# non-SSL Postgres (e.g. Homebrew/Docker) still works.
 DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=True
+        ssl_require=not DEBUG,
     )
 }
 
@@ -100,7 +102,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},  # ✅ Changed from StandardPasswordValidator
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 # Internationalization
@@ -113,7 +115,18 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Django 4.2+ replacement for the deprecated STATICFILES_STORAGE setting.
+# Same Whitenoise backend, just declared through the modern STORAGES dict.
+# Required on Django 5.1+ where STATICFILES_STORAGE was removed entirely.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Media files
 MEDIA_URL = '/media/'
@@ -127,9 +140,6 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
-    # Abuse protection. 'otp' is deliberately tight — each SMS costs money and an
-    # unthrottled 6-digit code is brute-forceable. Behind a proxy (Render), set
-    # NUM_PROXIES so the real client IP is used, not the load balancer's.
     'DEFAULT_THROTTLE_RATES': {
         'otp': '5/min',
         'login': '10/min',
@@ -172,10 +182,10 @@ if DEBUG:
 else:
     CORS_ALLOW_ALL_ORIGINS = False
     CORS_ALLOW_CREDENTIALS = True
+    # Localhost entries removed from the production list; they still work in DEBUG.
     CORS_ALLOWED_ORIGINS = [
         "https://www.ischool.ng",
         "https://api.ischool.ng",
-        'http://localhost:8081',
         # Add your mobile app's production URL if applicable
     ]
 
@@ -218,12 +228,41 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         "https://www.ischool.ng",
         "https://api.ischool.ng",
-        'http://localhost:8081',
     ]
 
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'Strict'
+
+# ============================================
+# Deployment / proxy
+# ============================================
+# Render terminates TLS and forwards plain HTTP to Django. Without this,
+# request.is_secure() is always False, cookies may not be marked secure,
+# and any redirect-based flow can end up in a loop.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# ============================================
+# Production security headers
+# ============================================
+# Only applied when DEBUG is off, so local dev is untouched.
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
+    # CSRF_COOKIE_SECURE is already handled above; setting it here for clarity.
+    CSRF_COOKIE_SECURE = True
+
+    # HSTS — starts the 1-year clock. Remove these three lines if you ever
+    # need to serve any *.ischool.ng subdomain over plain HTTP.
+    SECURE_HSTS_SECONDS = 31536000          # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'
 
 # ============================================
 # Logging - Production Ready
@@ -270,12 +309,12 @@ SLOT_PRICE_YEARLY  = 10000   # ₦100
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
 
-
-
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_BEAT_SCHEDULE = {
     'run-weekly-summary-every-monday': {
+        # ⚠️ Verify this import path matches where the task actually lives.
+        # If the module can't be imported, Celery beat will silently fail every Monday.
         'task': 'apps.tasks.weekly_summary.generate_weekly_summary',
         'schedule': crontab(hour=0, minute=0, day_of_week=1),
     },
@@ -283,7 +322,6 @@ CELERY_BEAT_SCHEDULE = {
 
 # OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
@@ -295,3 +333,6 @@ PAYMENT_CALLBACK_URL = "https://api.ischool.ng/api/payments/payment-callback/"
 AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
 AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
 AFRICASTALKING_SENDER_ID = config('AFRICASTALKING_SENDER_ID', default='iSchool')
+
+# Silence Django's "no explicit primary key" model warning.
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

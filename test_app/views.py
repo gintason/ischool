@@ -150,160 +150,199 @@ class SubmitTestAPIView(APIView):
 
     def post(self, request):
         serializer = SubmitTestSerializer(data=request.data)
-        if serializer.is_valid():
-            session_id = serializer.validated_data["session_id"]
-            answers = serializer.validated_data["answers"]
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                session = TestSession.objects.get(id=session_id, student=request.user)
-            except TestSession.DoesNotExist:
-                return Response({"detail": "Test session not found."}, status=status.HTTP_404_NOT_FOUND)
-            
-            # ✅ Time check: ensure submission is within 10 minutes
-            time_elapsed = timezone.now() - session.started_at
-            if time_elapsed > timedelta(minutes=10):
-                return Response({"detail": "Test submission time exceeded the 10-minute limit."}, status=status.HTTP_400_BAD_REQUEST)
+        session_id = serializer.validated_data["session_id"]
+        answers = serializer.validated_data["answers"]
 
-            # 🚫 Prevent double submission
-            if session.completed:
-                return Response({"detail": "This test has already been submitted."}, status=status.HTTP_400_BAD_REQUEST)
-
-            correct_mcq = 0
-            total_mcq = 0
-            theory_scores = []
-            detailed_answers = []
-
-            test_result = TestResult.objects.create(student=request.user, subject=session.subject, test_session=session)
-            test_result.total_questions = total_mcq + len(theory_scores)
-            test_result.save()
-
-            for ans in answers:
-                question_id = ans["question_id"]
-                student_response = ans["answer"]
-
-                try:
-                    question = Question.objects.get(id=question_id)
-                except Question.DoesNotExist:
-                    continue
-
-                is_correct = None
-                theory_score = None
-
-                if question.question_type == "mcq":
-                    is_correct = student_response == question.correct_answer
-                    if is_correct:
-                        correct_mcq += 1
-                    total_mcq += 1
-
-
-                elif question.question_type == "theory":
-                    expected = question.expected_answer or question.correct_answer or "No expected answer provided."
-                    grading_result = grade_theory_answer(
-                        question_text=question.text,
-                        expected_answer=expected,
-                        student_answer=student_response
-                    )
-                    theory_score = grading_result.get("score", 0)
-                    if not isinstance(theory_score, (int, float)):
-                        theory_score = 0
-
-                    theory_scores.append(theory_score)
-
-
-                StudentAnswer.objects.create(
-                    result=test_result,
-                    question=question,
-                    selected_option=student_response if question.question_type == "mcq" else None,
-                    is_correct=is_correct,
-                    theory_answer=student_response if question.question_type == "theory" else None,
-                    theory_match_percentage=theory_score
-                )
-
-                detailed_answers.append({
-                    "question": question.text,
-                    "student_answer": student_response,
-                    "correct_answer": question.correct_answer if question.question_type == "mcq" else (question.expected_answer or question.correct_answer),
-                    "is_mcq": question.question_type == "mcq",
-                    "is_correct": is_correct,
-                    "theory_score": theory_score
-                })
-
-            session.submitted_at = timezone.now()
-            session.completed = True
-
-            # ⏱️ Calculate duration of the test
-            if session.started_at and session.submitted_at:
-                duration = (session.submitted_at - session.started_at).total_seconds()
-                session.duration = duration  # Only if `duration` field exists
-
-            session.save()
-
-            # Final scoring
-            score_percent = round((correct_mcq / total_mcq) * 100, 2) if total_mcq > 0 else 0
-            avg_theory_score = round(sum(theory_scores) / len(theory_scores), 2) if theory_scores else 0
-            combined_score = round((score_percent * 0.7 + avg_theory_score * 0.3), 2)
-
-            test_result.score = combined_score
-            test_result.save()
-
-            # Generate PDF
-            context = {
-                "student_name": getattr(request.user, 'full_name', '') or request.user.email,
-                "date": datetime.now(),
-                "score": combined_score,
-                "total_mcq": total_mcq,
-                "correct_mcq": correct_mcq,
-                "avg_theory_score": avg_theory_score,
-                "answers": detailed_answers,
-                "logo_path": logo_path,  # pass the full path
-            }
-
-            html_content = render_to_string("emails/test_result_report.html", context)
-            pdf_file = BytesIO()
-            result = pisa.CreatePDF(src=html_content, dest=pdf_file)
-            if result.err:
-                return Response({"detail": "PDF generation failed."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            pdf_file.seek(0)
-            pdf_content = pdf_file.read()
-
-            # Prepare email content
-            email_subject = "iSchool Ola - Test Result"
-            email_body = (
-                f"Dear {context['student_name']},\n\n"
-                "Please find attached your test result summary.\n\n"
-                "Best regards,\niSchool Ola Team"
+        try:
+            session = TestSession.objects.get(id=session_id, student=request.user)
+        except TestSession.DoesNotExist:
+            return Response(
+                {"detail": "Test session not found."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-            # Determine recipients
-            student_email = request.user.email
-            parent_email = getattr(request.user.registration_group, 'email', None)
-            recipients = list(filter(None, [student_email, parent_email]))
+        # ⏱️ Time check: submission must be within the 10-minute window
+        time_elapsed = timezone.now() - session.started_at
+        if time_elapsed > timedelta(minutes=10):
+            return Response(
+                {"detail": "Test submission time exceeded the 10-minute limit."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+        # 🚫 Prevent double submission
+        if session.completed:
+            return Response(
+                {"detail": "This test has already been submitted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-           # ✅ Async email sending with threading (non-blocking)
-            def _send_results():
-                for recipient in recipients:
-                    try:
-                        email = EmailMessage(
-                            subject=email_subject,
-                            body=email_body,
-                            from_email="noreply@ischool.ng",
-                            to=[recipient],
-                        )
-                        email.attach("Test_Result.pdf", pdf_content, "application/pdf")
-                        email.send(fail_silently=False)
-                        logger.info(f"📨 Result email queued for {recipient}")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to send result email to {recipient}: {e}")
+        correct_mcq = 0
+        total_mcq = 0
+        theory_scores = []
+        detailed_answers = []
 
-            threading.Thread(target=_send_results, daemon=True).start()
+        # Create the TestResult shell first (needed by StudentAnswer FK)
+        test_result = TestResult.objects.create(
+            student=request.user,
+            subject=session.subject,
+            test_session=session,
+        )
 
-            return Response({
+        for ans in answers:
+            question_id = ans["question_id"]
+            student_response = ans["answer"]
+
+            try:
+                question = Question.objects.get(id=question_id)
+            except Question.DoesNotExist:
+                continue
+
+            is_correct = None
+            theory_score = None
+
+            if question.question_type == "mcq":
+                is_correct = student_response == question.correct_answer
+                if is_correct:
+                    correct_mcq += 1
+                total_mcq += 1
+
+            elif question.question_type == "theory":
+                expected = (
+                    question.expected_answer
+                    or question.correct_answer
+                    or "No expected answer provided."
+                )
+                grading_result = grade_theory_answer(
+                    question_text=question.text,
+                    expected_answer=expected,
+                    student_answer=student_response,
+                )
+                theory_score = grading_result.get("score", 0)
+                # 🛡️ Guard against non-numeric scores from the grader
+                if not isinstance(theory_score, (int, float)):
+                    theory_score = 0
+                theory_scores.append(theory_score)
+
+            StudentAnswer.objects.create(
+                result=test_result,
+                question=question,
+                selected_option=student_response if question.question_type == "mcq" else None,
+                is_correct=is_correct,
+                theory_answer=student_response if question.question_type == "theory" else None,
+                theory_match_percentage=theory_score,
+            )
+
+            detailed_answers.append({
+                "question": question.text,
+                "student_answer": student_response,
+                "correct_answer": (
+                    question.correct_answer
+                    if question.question_type == "mcq"
+                    else (question.expected_answer or question.correct_answer)
+                ),
+                "is_mcq": question.question_type == "mcq",
+                "is_correct": is_correct,
+                "theory_score": theory_score,
+            })
+
+        # ✅ Fix 1: set total_questions AFTER the loop
+        test_result.total_questions = total_mcq + len(theory_scores)
+
+        # ✅ Fix 2: dynamic score weighting — handles MCQ-only, theory-only, and mixed
+        score_percent = (correct_mcq / total_mcq * 100) if total_mcq > 0 else None
+        avg_theory_score = (sum(theory_scores) / len(theory_scores)) if theory_scores else None
+
+        if score_percent is not None and avg_theory_score is not None:
+            combined_score = round(score_percent * 0.7 + avg_theory_score * 0.3, 2)
+        elif score_percent is not None:
+            combined_score = round(score_percent, 2)
+        elif avg_theory_score is not None:
+            combined_score = round(avg_theory_score, 2)
+        else:
+            combined_score = 0.0
+
+        test_result.score = combined_score
+        test_result.save()
+
+        # Mark session as done + record duration
+        session.submitted_at = timezone.now()
+        session.completed = True
+        if session.started_at and session.submitted_at:
+            session.duration = (
+                session.submitted_at - session.started_at
+            ).total_seconds()
+        session.save()
+
+        # ---------- PDF generation ----------
+        context = {
+            "student_name": getattr(request.user, "full_name", "") or request.user.email,
+            "date": datetime.now(),
+            "score": combined_score,
+            "total_mcq": total_mcq,
+            "correct_mcq": correct_mcq,
+            "avg_theory_score": avg_theory_score if avg_theory_score is not None else 0,
+            "answers": detailed_answers,
+            "logo_path": logo_path,
+        }
+
+        html_content = render_to_string("emails/test_result_report.html", context)
+        pdf_file = BytesIO()
+        result = pisa.CreatePDF(src=html_content, dest=pdf_file)
+
+        if result.err:
+            logger.error("❌ PDF generation failed for session %s", session.id)
+            # Don't fail the whole submission just because the PDF failed.
+            # Return success anyway; email step below will just be skipped.
+            return Response(
+                {
+                    "message": "Test submitted, but result PDF could not be generated.",
+                    "score": combined_score,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        pdf_file.seek(0)
+        pdf_content = pdf_file.read()
+
+        # ---------- Email (async, non-blocking) ----------
+        email_subject = "iSchool Ola - Test Result"
+        email_body = (
+            f"Dear {context['student_name']},\n\n"
+            "Please find attached your test result summary.\n\n"
+            "Best regards,\niSchool Ola Team"
+        )
+
+        student_email = request.user.email
+        parent_email = getattr(request.user.registration_group, "email", None)
+        recipients = list(filter(None, [student_email, parent_email]))
+
+        def _send_results():
+            for recipient in recipients:
+                try:
+                    email = EmailMessage(
+                        subject=email_subject,
+                        body=email_body,
+                        from_email="noreply@ischool.ng",
+                        to=[recipient],
+                    )
+                    email.attach("Test_Result.pdf", pdf_content, "application/pdf")
+                    email.send(fail_silently=False)
+                    logger.info("📨 Result email sent to %s", recipient)
+                except Exception as e:
+                    logger.error("❌ Failed to send result email to %s: %s", recipient, e)
+
+        threading.Thread(target=_send_results, daemon=True).start()
+
+        return Response(
+            {
                 "message": "Test submitted. Result emailed.",
-                "score": combined_score
-            }, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                "score": combined_score,
+            },
+            status=status.HTTP_200_OK,
+        )
     
 
 @api_view(['GET'])
