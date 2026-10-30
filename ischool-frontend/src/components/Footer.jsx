@@ -40,6 +40,9 @@ const Footer = () => {
               <li><a href="/news" style={{ color: 'white', textDecoration: 'none' }}>News</a></li>
               <li><a href="/sign_up" style={{ color: 'white', textDecoration: 'none' }}>Take Test</a></li>
               <li><a href="/contact" style={{ color: 'white', textDecoration: 'none' }}>Contact Us</a></li>
+              <li><a href="/terms" style={{ color: 'white', textDecoration: 'none' }}>Terms & Conditions</a></li>
+              <li><a href="/privacy-policy.html" style={{ color: 'white', textDecoration: 'none' }}>Privacy Policy</a></li>
+              <li><a href="/delete-account.html" style={{ color: 'white', textDecoration: 'none' }}>Delete Account</a></li>
             </ul>
           </Col>
 
@@ -104,6 +107,11 @@ const Footer = () => {
         <Row>
           <Col className="text-center mt-4 text-white">
             <p>&copy; {new Date().getFullYear()} iSchool Ola. All Rights Reserved.</p>
+            <p style={{ fontSize: '0.9rem' }}>
+              <a href="/privacy-policy.html" style={{ color: 'white' }}>Privacy Policy</a>
+              {' · '}
+              <a href="/terms" style={{ color: 'white' }}>Terms & Conditions</a>
+            </p>
           </Col>
         </Row>
       </Container>
