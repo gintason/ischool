@@ -335,5 +335,15 @@ AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
 AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
 AFRICASTALKING_SENDER_ID = config('AFRICASTALKING_SENDER_ID', default='iSchool')
 
+# App-store review login. Google Play and Apple reviewers cannot receive SMS or
+# email codes, so these identifiers skip delivery and accept a fixed code.
+# Leave REVIEW_LOGIN_IDENTIFIERS empty to switch the bypass off.
+#   REVIEW_LOGIN_IDENTIFIERS=playreview@ischool.ng,08000000000
+#   REVIEW_LOGIN_CODE=246810
+REVIEW_LOGIN_IDENTIFIERS = [
+    i.strip() for i in config('REVIEW_LOGIN_IDENTIFIERS', default='').split(',') if i.strip()
+]
+REVIEW_LOGIN_CODE = config('REVIEW_LOGIN_CODE', default='')
+
 # Silence Django's "no explicit primary key" model warning.
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

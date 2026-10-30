@@ -997,6 +997,35 @@ def _normalise_verification_identifier(request):
     return formatted_phone.lstrip('+'), method, None
 
 
+def _review_login_identifiers():
+    """
+    Normalised identifiers of the app-store review accounts.
+
+    Stored the same way VerificationCode stores them (lowercase email, phone
+    as 234XXXXXXXXXX) so a reviewer can type either 080... or +234... .
+    """
+    code = str(getattr(settings, 'REVIEW_LOGIN_CODE', '') or '').strip()
+    if not re.fullmatch(r'\d{6}', code):
+        return set()
+
+    from .sms_services import format_phone_for_sms
+
+    identifiers = set()
+    for raw in getattr(settings, 'REVIEW_LOGIN_IDENTIFIERS', []) or []:
+        raw = str(raw).strip()
+        if '@' in raw:
+            identifiers.add(raw.lower())
+        else:
+            formatted = format_phone_for_sms(raw)
+            if formatted:
+                identifiers.add(formatted.lstrip('+'))
+    return identifiers
+
+
+def is_review_login(identifier):
+    return bool(identifier) and identifier in _review_login_identifiers()
+
+
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -1008,6 +1037,20 @@ def send_verification_code(request):
 
     # Only one active code should exist for an identifier.
     VerificationCode.objects.filter(identifier=identifier).delete()
+
+    if is_review_login(identifier):
+        # Store reviewers can't read an inbox or SMS: nothing is sent and the
+        # configured fixed code is the valid one.
+        VerificationCode.objects.create(
+            identifier=identifier,
+            method=method,
+            code=str(settings.REVIEW_LOGIN_CODE).strip(),
+        )
+        logger.info('Review login code issued for %s', identifier)
+        return Response(
+            {'message': 'Code sent successfully', 'expires_in': 600, 'method': method},
+            status=200,
+        )
 
     verification = VerificationCode.objects.create(
         identifier=identifier,
@@ -1124,17 +1167,20 @@ def login_or_register(request):
             return Response({'error': 'Invalid phone number'}, status=400)
         identifier = formatted.lstrip('+')
 
-    # Check if verification exists and is verified
-    try:
-        verification = VerificationCode.objects.filter(
-            identifier=identifier,
-            is_verified=True
-        ).latest('created_at')
-    except VerificationCode.DoesNotExist:
+    # A verified code is good for one login, shortly after it was entered.
+    # Without this, anyone who knew a number that had ever been verified could
+    # call this endpoint and receive that account's tokens with no code.
+    verification = VerificationCode.objects.filter(
+        identifier=identifier,
+        is_verified=True,
+        expires_at__gte=timezone.now(),
+    ).order_by('-created_at').first()
+    if verification is None:
         return Response({
             'error': 'Identifier not verified. Please verify first.',
             'verified': False
         }, status=400)
+    VerificationCode.objects.filter(identifier=identifier).delete()
 
     User = get_user_model()
     if method == 'email':
