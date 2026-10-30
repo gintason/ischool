@@ -9,15 +9,24 @@ fixed password:
 
 Safe to run again: it updates the same three accounts and pushes their
 subscriptions forward.
+
+The review teacher and review student only ever see each other: the live-class
+auto-matching signals are switched off while this runs, and the teacher is
+never given a TeacherAssignment (which would pull real students into its
+classes). Real students and teachers are never matched to review accounts.
 """
-from datetime import timedelta
+from contextlib import contextmanager
+from datetime import time, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models.signals import post_save
 from django.utils import timezone
 
+from teachers import signals as match_signals
 from teachers.models import (
-    ApplicationStatus, OleClassLevel, OleSubject, TeacherApplication, TeacherAssignment,
+    ApplicationStatus, LiveClassSchedule, OleClassLevel, OleStudentMatch, OleSubject,
+    TeacherApplication, TeacherAssignment,
 )
 from users.models import (
     CustomUser, OleStudentProfile, OleStudentSubjectAccess, OleStudentSubscription,
@@ -25,6 +34,25 @@ from users.models import (
 )
 
 VALID_YEARS = 3
+REVIEW_CLASS_DAYS = 14  # one demo class a day, so reviewers always see an upcoming lesson
+
+_MATCH_RECEIVERS = [
+    (match_signals.match_students_on_schedule_create, LiveClassSchedule),
+    (match_signals.auto_match_students_on_teacher_assignment, TeacherAssignment),
+    (match_signals.auto_match_teacher_on_student_enrollment, CustomUser),
+    (match_signals.auto_create_matches_for_existing_student_update, CustomUser),
+]
+
+
+@contextmanager
+def auto_matching_disabled():
+    for receiver, sender in _MATCH_RECEIVERS:
+        post_save.disconnect(receiver, sender=sender)
+    try:
+        yield
+    finally:
+        for receiver, sender in _MATCH_RECEIVERS:
+            post_save.connect(receiver, sender=sender)
 
 ACCOUNTS = {
     'ola': {
@@ -62,11 +90,14 @@ class Command(BaseCommand):
         user.save()
         return user
 
-    @transaction.atomic
     def handle(self, *args, **options):
         password = options['password']
         if len(password) < 8:
             raise CommandError('Use a password of at least 8 characters.')
+        with auto_matching_disabled(), transaction.atomic():
+            self._create(password)
+
+    def _create(self, password):
 
         expires = timezone.now() + timedelta(days=365 * VALID_YEARS)
         class_level = OleClassLevel.objects.order_by('id').first()
@@ -115,11 +146,30 @@ class Command(BaseCommand):
                 'availability': 'Weekdays', 'status': ApplicationStatus.HIRED,
             },
         )
+
+        # Undo anything an earlier version of this command (or the matching
+        # signals) linked to the review accounts, including real students
+        # matched into the review teacher's classes.
+        TeacherAssignment.objects.filter(teacher=teacher).delete()
+        LiveClassSchedule.objects.filter(teacher=teacher).delete()
+        OleStudentMatch.objects.filter(student=ole).delete()
+
+        # Private demo classes: review teacher + review student only.
         if class_level and subjects:
-            TeacherAssignment.objects.get_or_create(
-                teacher=teacher, subject=subjects[0], class_level=class_level)
+            today = timezone.localdate()
+            for offset in range(1, REVIEW_CLASS_DAYS + 1):
+                schedule = LiveClassSchedule.objects.create(
+                    teacher=teacher, subject=subjects[0], class_level=class_level,
+                    date=today + timedelta(days=offset),
+                    start_time=time(10, 0), end_time=time(11, 0),
+                )
+                OleStudentMatch.objects.create(student=ole, schedule=schedule)
 
         self.stdout.write(self.style.SUCCESS('Review accounts ready (valid until %s):' % expires.date()))
+        if class_level and subjects:
+            self.stdout.write('  Demo classes: %s %s, 10:00 daily for the next %d days '
+                              '(review accounts only - re-run to extend)'
+                              % (subjects[0].name, class_level.name, REVIEW_CLASS_DAYS))
         self.stdout.write('  Ola student  - username: %s  password: %s' % (ola.username, password))
         self.stdout.write('  Ole student  - email:    %s  password: %s' % (ole.email, password))
         self.stdout.write('  Ole teacher  - email:    %s  password: %s' % (teacher.email, password))
