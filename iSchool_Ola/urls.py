@@ -21,6 +21,8 @@ from django.conf.urls.static import static
 from django.views.generic import TemplateView
 from django.http import HttpResponseNotFound
 
+from teachers.views import TeacherLoginView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
 
@@ -31,6 +33,8 @@ urlpatterns = [
     path("api/student/dashboard/", include("student_dashboard.urls")),
     path("parent/", include("parent_dashboard.urls")),
     path("api/payments/", include("payments.urls")),
+    # The mobile app's Ole teacher login posts here (not /api/teachers/login/).
+    path("api/login/", TeacherLoginView.as_view(), name="teacher-login-mobile"),
     path("api/", include("test_app.urls")),
     path("api/teachers/", include("teachers.urls", namespace="teachers")),
     path("api/elibrary/", include("elibrary.urls")),  # ✅ Fixed
