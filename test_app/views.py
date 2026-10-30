@@ -32,6 +32,30 @@ import threading
 from .models import CLASS_CHOICES  
 
 
+# A Test names its subject/topic either through subject_fk/topic_fk (admin
+# JSON upload) or the plain subject/topic text fields (older rows). These
+# helpers match either, so every uploaded question is reachable.
+def _subject_q(name, prefix='test__'):
+    return Q(**{prefix + 'subject_fk__name__iexact': name}) | Q(**{prefix + 'subject__iexact': name})
+
+
+def _topic_q(name, prefix='test__'):
+    return Q(**{prefix + 'topic_fk__name__iexact': name}) | Q(**{prefix + 'topic__iexact': name})
+
+
+def _names_with_questions(class_level, field, subject=None):
+    """Subject (or topic) names that have at least one question at a class level."""
+    tests = Test.objects.filter(class_level=class_level, questions__isnull=False)
+    if subject:
+        tests = tests.filter(_subject_q(subject, prefix=''))
+    names = set()
+    for fk_name, text in tests.values_list(field + '_fk__name', field).distinct():
+        name = (fk_name or text or '').strip()
+        if name:
+            names.add(name)
+    return sorted(names, key=str.lower)
+
+
 logo_relative_path = 'img/logo.png'  # Relative to 'static/'
 logo_path = os.path.join(settings.STATIC_ROOT, 'img', 'logo.png')
 logo_path = os.path.join(settings.BASE_DIR, 'static', logo_relative_path)
@@ -56,22 +80,16 @@ class StartTestAPIView(APIView):
             subject = serializer.validated_data['subject']
             topic = serializer.validated_data['topic']
 
-            # Fetch questions - updated to work with both old and new structure
-            questions = Question.objects.filter(
-                test__class_level=class_level,
-                test__subject__name=subject,  # Support new ForeignKey
-                test__topic__name=topic,      # Support new ForeignKey
-            )
-            
-            # If no questions found with new structure, try old structure
-            if not questions.exists():
-                questions = Question.objects.filter(
-                    test__class_level=class_level,
-                    test__subject_old=subject,
-                    test__topic_old=topic,
+            questions = list(Question.objects.filter(
+                _subject_q(subject), _topic_q(topic), test__class_level=class_level,
+            ).distinct())
+            if not questions:
+                return Response(
+                    {"detail": "No questions have been added for this topic yet. Please choose another topic."},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
 
-            selected_questions = random.sample(list(questions), min(10, len(questions))) if questions.exists() else []
+            selected_questions = random.sample(questions, min(10, len(questions)))
 
             # Create test session
             session = TestSession.objects.create(
@@ -81,8 +99,10 @@ class StartTestAPIView(APIView):
                 topic=topic
             )
 
-            # Serialize questions using updated QuestionSerializer
+            # Never send the answers to the device taking the test.
             question_data = QuestionSerializer(selected_questions, many=True).data
+            for item in question_data:
+                item.pop("correct_answer", None)
 
             return Response({
                 "session_id": str(session.id),
@@ -348,8 +368,8 @@ class SubmitTestAPIView(APIView):
 @api_view(['GET'])
 @permission_classes([AllowAny])  # 👈 make it public
 def list_class_levels(request):
-    class_levels = Test.objects.values_list('class_level', flat=True).distinct()
-    return Response({'class_levels': list(class_levels)})
+    # Every class level is always offered; subjects appear once questions exist.
+    return Response({'class_levels': [code for code, _label in CLASS_CHOICES]})
 
 
 @api_view(['GET'])
@@ -359,12 +379,8 @@ def list_subjects(request):
     if not class_level:
         return Response({'error': 'class_level parameter is required.'}, status=400)
     
-    # Try to get subjects from Subject model first, fallback to Test model
-    subjects = list(Subject.objects.filter(class_level=class_level).values_list('name', flat=True).distinct())
-    if not subjects:
-        subjects = Test.objects.filter(class_level=class_level).values_list('subject_old', flat=True).distinct()
-    
-    return Response({'subjects': list(subjects)})
+    # Only subjects that actually have questions, so a test can always start.
+    return Response({'subjects': _names_with_questions(class_level, 'subject')})
 
 
 @api_view(['GET'])
@@ -376,15 +392,7 @@ def list_topics(request):
     if not class_level or not subject_name:
         return Response({'error': 'class_level and subject parameters are required.'}, status=400)
     
-    # Try to get topics from Topic model first
-    try:
-        subject = Subject.objects.get(name=subject_name, class_level=class_level)
-        topics = list(Topic.objects.filter(subject=subject).values_list('name', flat=True).distinct())
-    except Subject.DoesNotExist:
-        # Fallback to old method
-        topics = Test.objects.filter(class_level=class_level, subject_old=subject_name).values_list('topic_old', flat=True).distinct()
-    
-    return Response({'topics': list(topics)})
+    return Response({'topics': _names_with_questions(class_level, 'topic', subject=subject_name)})
 
 
 class SubjectListAPIView(APIView):
