@@ -19,6 +19,7 @@ import ErrorBoundary from './pages/ErrorBoundary';
 import RegistrationSuccess from './pages/RegistrationSuccess';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import OurTerms from './pages/OurTerms';
+import DeleteAccount from './pages/DeleteAccount';
 
 import Apply from './pages/teacher/Apply';
 import Shortlisted from './pages/teacher/Shortlisted';
@@ -64,6 +65,7 @@ function App() {
           <Route path="/registration_success" element={<RegistrationSuccess />} />
           <Route path="/privacy_policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<OurTerms />} />
+          <Route path="/delete_account" element={<DeleteAccount />} />
          
         </Route>
 

@@ -137,7 +137,7 @@ const OnboardingPage = () => {
               &copy; {new Date().getFullYear()} iSchool.ng. All Rights Reserved. Developed By AiTrend
             </p>
             <p className="footer-copyright">
-              <a href="/privacy-policy.html" style={{ color: 'inherit' }}>Privacy Policy</a>
+              <a href="/privacy_policy" style={{ color: 'inherit' }}>Privacy Policy</a>
               {' · '}
               <a href="/terms" style={{ color: 'inherit' }}>Terms &amp; Conditions</a>
             </p>
