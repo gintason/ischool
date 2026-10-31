@@ -52,6 +52,17 @@ class ReviewLoginTests(TestCase):
         res = self.login('+2348000000001', 'phone')
         self.assertEqual(res.data['user']['phone_number'], '2348000000001')
 
+    def test_fixed_code_works_without_send_code(self):
+        res = self.client.post(VERIFY, {'identifier': 'playreview@ischool.ng', 'method': 'email', 'code': '246810'}, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+        res = self.client.post(LOGIN, {'identifier': 'playreview@ischool.ng', 'method': 'email', 'platform': 'ola'}, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+
+    def test_double_submit_after_login_still_ok(self):
+        self.login('playreview@ischool.ng', 'email')
+        res = self.client.post(VERIFY, {'identifier': 'playreview@ischool.ng', 'method': 'email', 'code': '246810'}, format='json')
+        self.assertEqual(res.status_code, 200, res.data)
+
     def test_wrong_code_rejected(self):
         self.client.post(SEND, {'identifier': 'playreview@ischool.ng', 'method': 'email'}, format='json')
         res = self.client.post(VERIFY, {'identifier': 'playreview@ischool.ng', 'method': 'email', 'code': '111111'}, format='json')
@@ -72,6 +83,17 @@ class ReviewLoginTests(TestCase):
 
 
 class VerifiedCodeIsSingleUseTests(TestCase):
+    def test_normal_code_double_submit_is_ok_but_wrong_code_is_not(self):
+        cache.clear()
+        with mock.patch('users.sms_services.send_email_code', return_value=True):
+            self.client.post(SEND, {'identifier': 'kid@example.com', 'method': 'email'}, format='json')
+        code = VerificationCode.objects.get(identifier='kid@example.com').code
+        payload = {'identifier': 'kid@example.com', 'method': 'email', 'code': code}
+        self.assertEqual(self.client.post(VERIFY, payload, format='json').status_code, 200)
+        self.assertEqual(self.client.post(VERIFY, payload, format='json').status_code, 200)
+        wrong = dict(payload, code='000000' if code != '000000' else '111111')
+        self.assertEqual(self.client.post(VERIFY, wrong, format='json').status_code, 400)
+
     def setUp(self):
         cache.clear()  # OTP endpoints are throttled per IP
         self.client = APIClient()

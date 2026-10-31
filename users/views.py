@@ -1098,6 +1098,21 @@ def verify_code(request):
     if not code:
         return Response({'error': 'Identifier and code are required'}, status=400)
 
+    if is_review_login(identifier):
+        # Store reviewers type the fixed code, sometimes without pressing
+        # "Send code" first or after the app has already submitted it once.
+        # Accept the fixed code on its own so the review login always works.
+        if code != str(settings.REVIEW_LOGIN_CODE).strip():
+            return Response({'error': 'Invalid verification code'}, status=400)
+        VerificationCode.objects.filter(identifier=identifier).delete()
+        VerificationCode.objects.create(
+            identifier=identifier, method=_method or 'email', code=code, is_verified=True,
+        )
+        return Response(
+            {'message': 'Verification successful', 'identifier': identifier, 'verified': True},
+            status=200,
+        )
+
     try:
         verification = VerificationCode.objects.get(
             identifier=identifier,
@@ -1105,6 +1120,16 @@ def verify_code(request):
             is_verified=False,
         )
     except VerificationCode.DoesNotExist:
+        # The app submits automatically on the sixth digit; a second tap on
+        # "Verify" must not turn a successful check into "Invalid code".
+        if VerificationCode.objects.filter(
+            identifier=identifier, code=code, is_verified=True,
+            expires_at__gte=timezone.now(),
+        ).exists():
+            return Response(
+                {'message': 'Verification successful', 'identifier': identifier, 'verified': True},
+                status=200,
+            )
         return Response({'error': 'Invalid verification code'}, status=400)
 
     if verification.is_expired():
