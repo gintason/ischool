@@ -1,6 +1,7 @@
 # teachers/admin.py
 from django.utils.html import format_html
 from django.contrib import admin, messages
+from users.review_accounts import without_review_accounts
 from django.contrib.auth.models import BaseUserManager
 from django.contrib.auth.models import UserManager
 from django.utils.crypto import get_random_string
@@ -474,11 +475,11 @@ class TeacherAssignmentAdmin(admin.ModelAdmin):
         matched_total = 0
         
         for assignment in queryset:
-            students = CustomUser.objects.filter(
+            students = without_review_accounts(CustomUser.objects.filter(
                 role='ole_student',
                 ole_class_level=assignment.class_level,
                 ole_subjects=assignment.subject
-            )
+            ))
             
             # Find or create a schedule
             tomorrow = timezone.localdate() + timedelta(days=1)

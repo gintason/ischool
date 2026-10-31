@@ -382,6 +382,22 @@ class LiveClassScheduleDetailSerializer(serializers.ModelSerializer):
             return None
 
 
+class StudentUpcomingLessonSerializer(LiveClassScheduleDetailSerializer):
+    """
+    Upcoming lessons for a student's dashboard. The apps print subject and
+    teacher as text, so they are sent as plain strings here (the nested
+    {"name": ...} objects crashed the mobile dashboard: React Native cannot
+    render an object inside <Text>). The lesson-detail endpoint keeps the
+    nested form, which its screens expect.
+    """
+
+    def get_subject(self, obj):
+        return obj.subject.name if obj.subject else None
+
+    def get_teacher(self, obj):
+        return obj.teacher.full_name if obj.teacher else None
+
+
 class LessonHistorySerializer(serializers.ModelSerializer):
     subject = serializers.CharField(source="subject.name")
     class_level = serializers.CharField(source="class_level.name")

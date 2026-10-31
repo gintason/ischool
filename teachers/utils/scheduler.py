@@ -1,6 +1,7 @@
 # teachers/utils/scheduler.py
 
 from users.models import CustomUser
+from users.review_accounts import is_review_account, without_review_accounts
 from teachers.models import OleStudentMatch, LiveClassSchedule, TeacherAssignment
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -15,11 +16,11 @@ def auto_match_students_to_schedule(schedule):
     if not isinstance(schedule, LiveClassSchedule):
         raise ValueError("schedule must be an instance of LiveClassSchedule")
 
-    students = CustomUser.objects.filter(
+    students = without_review_accounts(CustomUser.objects.filter(
         role='ole_student',
         ole_class_level=schedule.class_level,
         ole_subjects=schedule.subject
-    ).distinct()
+    ).distinct())
 
     matched_count = 0
     for ole_student in students:
@@ -53,11 +54,11 @@ def auto_schedule_for_teacher_assignment(teacher_assignment, days_ahead=7):
         raise ValueError("teacher_assignment must be an instance of TeacherAssignment")
     
     # Find students who need this subject at this class level
-    students = CustomUser.objects.filter(
+    students = without_review_accounts(CustomUser.objects.filter(
         role='ole_student',
         ole_class_level=teacher_assignment.class_level,
         ole_subjects=teacher_assignment.subject
-    )
+    ))
     
     # Minimum 3 students to schedule a class (adjust as needed)
     MIN_STUDENTS_REQUIRED = 3
@@ -136,6 +137,8 @@ def auto_match_student_to_teachers(student):
     Returns:
         int: Number of matches created
     """
+    if is_review_account(student):
+        return 0
     if student.role != 'ole_student':
         raise ValueError("User must be an OLE student")
     

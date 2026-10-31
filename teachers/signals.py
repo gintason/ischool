@@ -9,11 +9,12 @@ from teachers.models import (
 )
 from users.models import CustomUser
 from .utils.scheduler import auto_match_students_to_schedule
+from users.review_accounts import is_review_account, without_review_accounts
 
 @receiver(post_save, sender=LiveClassSchedule)
 def match_students_on_schedule_create(sender, instance, created, **kwargs):
     """When a schedule is created, automatically match students"""
-    if created:
+    if created and not is_review_account(instance.teacher):
         matched = auto_match_students_to_schedule(instance)
         print(f"[AUTO MATCH] {matched} students matched to schedule #{instance.id}")
 
@@ -25,17 +26,19 @@ def auto_match_students_on_teacher_assignment(sender, instance, created, **kwarg
     """
     if created:
         teacher = instance.teacher
+        if is_review_account(teacher):
+            return
         subject = instance.subject
         class_level = instance.class_level
         
         print(f"[AUTO MATCH] New teacher assignment: {teacher.full_name} -> {subject.name} ({class_level.name})")
         
         # Find students who need this subject at this class level
-        students = CustomUser.objects.filter(
+        students = without_review_accounts(CustomUser.objects.filter(
             role='ole_student',
             ole_class_level=class_level,
             ole_subjects=subject
-        )
+        ))
         
         if not students.exists():
             print(f"[AUTO MATCH] No students found for {subject.name} - {class_level.name}")
@@ -84,7 +87,7 @@ def auto_match_teacher_on_student_enrollment(sender, instance, created, **kwargs
     When a new student enrolls with subjects and class level,
     automatically match them to existing teacher schedules
     """
-    if created and instance.role == 'ole_student':
+    if created and instance.role == 'ole_student' and not is_review_account(instance):
         class_level = instance.ole_class_level
         subjects = instance.ole_subjects.all()
         
@@ -136,7 +139,7 @@ def auto_create_matches_for_existing_student_update(sender, instance, **kwargs):
     When an existing student's subjects or class level changes,
     automatically create new matches
     """
-    if instance.role == 'ole_student':
+    if instance.role == 'ole_student' and not is_review_account(instance):
         # This is for updates to existing students
         # Track if this is an update (not a new creation)
         if not kwargs.get('created', False):

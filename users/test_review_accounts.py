@@ -83,3 +83,18 @@ class ReviewAccountsTests(TestCase):
             teacher=self.real_teacher, subject=self.maths, class_level=self.level,
             date=LiveClassSchedule.objects.first().date, start_time='09:00', end_time='10:00')
         self.assertTrue(OleStudentMatch.objects.filter(student=self.real, schedule=schedule).exists())
+
+    def test_upcoming_lessons_send_text_the_app_can_show(self):
+        res = self.client.post('/api/users/ole-student/login/',
+                               {'email': 'ole.review@ischool.ng', 'password': PASSWORD}, format='json')
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + res.data['key'])
+        res = self.client.get('/api/teachers/ole-student/upcoming-lessons/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 14)
+        lesson = res.data[0]
+        self.assertEqual(lesson['subject'], 'Mathematics')
+        self.assertEqual(lesson['teacher'], 'Play Review (Ole Teacher)')
+        # Lesson detail keeps the nested shape its screens read (subject.name).
+        detail = self.client.get('/api/users/ole-student/lesson/%d/' % lesson['id'])
+        self.assertEqual(detail.status_code, 200, detail.data)
+        self.assertEqual(detail.data['subject'], {'name': 'Mathematics'})

@@ -46,7 +46,9 @@ from datetime import datetime
 from django.utils.timezone import now
 from .models import OleLesson
 from rest_framework.authentication import TokenAuthentication
-from users.serializers import LiveClassScheduleDetailSerializer, TeacherEmailLoginSerializer
+from users.serializers import (
+    LiveClassScheduleDetailSerializer, StudentUpcomingLessonSerializer, TeacherEmailLoginSerializer,
+)
 from django.core.mail import send_mail
 from django.contrib import messages
 
@@ -516,7 +518,7 @@ class StudentUpcomingLessonsView(APIView):
         ).select_related('schedule__subject', 'schedule__class_level', 'schedule__teacher')
 
         lessons = [match.schedule for match in matches]
-        serializer = LiveClassScheduleDetailSerializer(lessons, many=True)
+        serializer = StudentUpcomingLessonSerializer(lessons, many=True)
 
         return Response(serializer.data)
     
